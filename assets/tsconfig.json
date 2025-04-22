@@ -1,0 +1,30 @@
+{
+    "compilerOptions": {
+        "verbatimModuleSyntax": true,
+        "types": ["node", "svelte"],
+        "baseUrl": ".",
+        "paths": {
+            "$lib": ["svelte"],
+            "$lib/*": ["svelte/*"]
+        },
+        "moduleResolution": "bundler",
+        "target": "ESNext",
+        "module": "ESNext",
+        "allowJs": true,
+        "resolveJsonModule": true,
+        "checkJs": true,
+        "esModuleInterop": true,
+        "forceConsistentCasingInFileNames": true,
+        "skipLibCheck": true,
+        "sourceMap": true,
+        "noEmit": true
+    },
+    "include": [
+        "js/**/*.ts",
+        "js/**/*.js",
+        "js/**/*.svelte",
+        "svelte/**/*.ts",
+        "svelte/**/*.js",
+        "svelte/**/*.svelte"
+    ]
+}

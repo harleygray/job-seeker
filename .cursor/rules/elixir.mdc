@@ -1,0 +1,90 @@
+---
+description: 
+globs: *.ex
+alwaysApply: false
+---
+# Built-in JSON Module
+
+If processing .json data, ALWAYS use Elixir's built-in JSON module
+
+Elixir's built-in JSON module provides RFC 8259 and ECMA 404 compliant JSON encoding and decoding. This module is available since Elixir 1.18.0.
+
+## Data Type Conversions
+
+### Encoding (Elixir to JSON)
+
+| Elixir Type            | JSON Type |
+|------------------------|-----------|
+| `integer()` \| `float()` | Number    |
+| `true` \| `false`      | Boolean   |
+| `nil`                  | Null      |
+| `binary()`             | String    |
+| `atom()`               | String    |
+| `list()`               | Array     |
+| `%{String.Chars.t() => _}` | Object  |
+
+### Decoding (JSON to Elixir)
+
+| JSON Type | Elixir Type             |
+|-----------|-------------------------|
+| Number    | `integer()` \| `float()` |
+| Boolean   | `true` \| `false`      |
+| Null      | `nil`                  |
+| String    | `binary()`             |
+| Object    | `%{binary() => _}`     |
+
+## Basic Usage
+
+### Encoding
+
+```elixir
+# Encode to binary
+json_binary = JSON.encode!([1, 2, "three", %{key: "value"}])
+# => "[1,2,\"three\",{\"key\":\"value\"}]"
+
+# For better IO performance, encode to iodata
+json_iodata = JSON.encode_to_iodata!([1, 2, "three", %{key: "value"}])
+IO.iodata_to_binary(json_iodata)
+# => "[1,2,\"three\",{\"key\":\"value\"}]"
+```
+
+### Decoding
+
+```elixir
+# Safe decoding with pattern matching
+case JSON.decode(json_string) do
+  {:ok, decoded} -> 
+    # Process successfully decoded data
+    handle_data(decoded)
+  {:error, reason} -> 
+    # Handle decoding errors
+    handle_error(reason)
+end
+
+# Shorthand with exceptions (use in controlled environments)
+decoded = JSON.decode!(json_string)
+```
+
+## Error Handling
+
+The `decode/1` function returns `{:ok, result}` or `{:error, reason}` where reason can be:
+
+- `{:unexpected_end, offset}` - incomplete JSON value
+- `{:invalid_byte, offset, byte}` - unexpected byte or invalid UTF-8
+- `{:unexpected_sequence, offset, bytes}` - invalid UTF-8 escape sequence
+
+The `decode!/1` function raises an exception with the same error details.
+
+## Performance Tips
+1. For streaming decoding, use Erlang's `:json` module
+
+## Migration from Jason
+
+When migrating from Jason to the built-in JSON module:
+
+1. Replace `Jason.encode!/1` with `JSON.encode!/1`
+2. Replace `Jason.decode/1` with `JSON.decode/1`
+3. Update error handling for the different error format
+4. For custom encoders, implement the `JSON.Encoder` protocol instead of `Jason.Encoder`
+
+This native JSON module performance is on par with Jason for most use cases.

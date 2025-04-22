@@ -1,0 +1,220 @@
+defmodule JobHuntWeb.JobLive.Interface do
+  use JobHuntWeb, :live_view
+  use LiveSvelte.Components
+  alias JobHunt.Job.Context
+
+  @impl true
+  def mount(_params, _session, socket) do
+    socket =
+      socket
+      |> assign(:page_title, "Job Interface")
+      |> assign(:jobs, [])
+      |> assign(:selected_job_id, nil)
+      |> assign(:selected_job, nil)
+      |> assign(:creating_job, false)
+
+    if connected?(socket) do
+      send(self(), :load_jobs)
+    end
+
+    {:ok, socket}
+  end
+
+  @impl true
+  def render(assigns) do
+    ~H"""
+    <div id="interface-container" class="h-screen flex flex-col bg-gray-50">
+      <div class="z-50">
+        <.safe_svelte name="Navbar" socket={@socket} />
+      </div>
+
+      <div class="h-full flex overflow-hidden">
+        <!-- Job List (1/4 width) -->
+        <.safe_svelte
+            name="admin/components/JobList"
+            props={
+              %{
+                jobs: @jobs,
+                selectedJobId: @selected_job_id
+              }
+            }
+            socket={@socket}
+            class="w-1/4"
+          />
+
+          <.safe_svelte
+            name="admin/components/JobDetail"
+            props={%{selectedJob: @selected_job, creatingJob: @creating_job}}
+            socket={@socket}
+            class="w-3/4"
+          />
+        </div>
+
+      </div>
+
+    """
+  end
+
+
+  @impl true
+  def handle_info(:load_jobs, socket) do
+    jobs = Context.list_jobs_filtered(archived: false, applied: false)
+    encoded_jobs = Enum.map(jobs, &encode_job/1)
+    # IO.inspect(encoded_jobs, label: "Encoded jobs")
+    socket = assign(socket, :jobs, encoded_jobs)
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("select_job", %{"id" => job_id}, socket) do
+    selected_job = Context.get_job!(job_id)
+    encoded_job = encode_job(selected_job)
+
+    socket =
+      socket
+      |> assign(:selected_job_id, job_id)
+      |> assign(:selected_job, encoded_job) # Assign encoded job
+      |> assign(:creating_job, false)
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("create_new_job", _params, socket) do
+    socket =
+      socket
+      |> assign(:creating_job, true)
+      |> assign(:selected_job_id, nil)
+      |> assign(:selected_job, nil)
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("cancel_create_job", _params, socket) do
+    socket = assign(socket, :creating_job, false)
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("create_job", job_params, socket) do
+    IO.inspect(job_params, label: "Attempting to create job with params")
+    result = Context.create_job(job_params)
+    IO.inspect(result, label: "Context.create_job result")
+
+    case result do
+      {:ok, job} ->
+        IO.puts("Job creation successful, sending :load_jobs")
+        send(self(), :load_jobs)
+        encoded_job = encode_job(job)
+
+        socket =
+          socket
+          |> assign(:creating_job, false)
+          |> assign(:selected_job_id, job.id)
+          |> assign(:selected_job, encoded_job) # Assign encoded job
+          |> put_flash(:info, "Job created successfully.")
+
+        {:reply, %{success: true, message: "Job created successfully.", job_id: job.id}, socket}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        IO.inspect(changeset, label: "Changeset errors on create")
+        {:reply, %{success: false, errors: translate_errors(changeset)}, socket}
+
+      other ->
+        IO.inspect(other, label: "Unexpected result from Context.create_job")
+        {:reply, %{success: false, message: "Unexpected error creating job."}, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("update_job", %{"id" => job_id} = job_params, socket) do
+    job = Context.get_job!(job_id)
+
+    # Translate incoming status to actual DB fields if present
+    update_attrs =
+      if status = job_params["status"] do
+         params_from_status(status)
+      else
+        # If status isn't the only param, handle others (e.g., from full form save)
+        job_params
+        |> Map.delete("id") # Remove id as it's not a schema field
+        |> Map.delete("status") # Remove derived status if present
+      end
+
+    IO.inspect(update_attrs, label: "Attrs for Context.update_job")
+
+    case Context.update_job(job, update_attrs) do
+      {:ok, updated_job} ->
+        send(self(), :load_jobs)
+        encoded_job = encode_job(updated_job)
+
+        socket =
+          socket
+          |> assign(:selected_job, encoded_job)
+          |> put_flash(:info, "Job updated successfully.")
+
+        {:reply, %{success: true, message: "Job updated successfully."}, socket}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        IO.inspect(changeset, label: "Changeset errors on update")
+        {:reply, %{success: false, errors: translate_errors(changeset)}, socket}
+
+      other ->
+        IO.inspect(other, label: "Unexpected result from Context.update_job")
+        {:reply, %{success: false, message: "Unexpected error updating job."}, socket}
+    end
+  end
+
+  defp translate_errors(changeset) do
+    Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
+      Regex.replace(~r"%{(\w+)}", msg, fn _, key ->
+        opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
+      end)
+    end)
+  end
+
+  # Encoder function for Job struct
+  defp encode_job(nil), do: nil
+  defp encode_job(%JobHunt.Job{} = job) do
+    %{
+      "id" => job.id,
+      "title" => job.title,
+      "employer" => job.employer,
+      "location" => job.location || "",
+      "salary" => job.salary || "",
+      "apply_link" => job.apply_link || "",
+      "description" => job.description || "",
+      "status" => job_status(job),
+      "seek_job_id" => job.seek_job_id || "",
+      "formatted_description" => job.formatted_description || "",
+      "data_analyst_score" => job.data_analyst_score || 0,
+      "data_engineer_score" => job.data_engineer_score || 0,
+      "data_scientist_score" => job.data_scientist_score || 0,
+      "software_engineer_score" => job.software_engineer_score || 0,
+      "ai_engineer_score" => job.ai_engineer_score || 0,
+      "product_owner_score" => job.product_owner_score || 0,
+      "applied" => job.applied || false,
+      "archived" => job.archived || false,
+      "created_at" => job.inserted_at,
+      "updated_at" => job.updated_at
+    }
+  end
+
+  # Helper to translate status string back to DB fields
+  defp params_from_status("Active") do
+    %{archived: false} # Active means not archived
+  end
+  defp params_from_status("Archived") do
+    %{archived: true} # Archived means archived
+  end
+  # Fallback for unknown status - maybe return empty map or log error
+  defp params_from_status(unknown_status) do
+    IO.inspect(unknown_status, label: "Received unknown status for update")
+    %{} # Return empty map - don't change archive status for unknown input
+  end
+
+  # Helper to determine status for encoding (adjust logic as needed)
+  defp job_status(%JobHunt.Job{archived: true}), do: "Archived"
+  defp job_status(_), do: "Active" # Default to Active if not archived
+end
