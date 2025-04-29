@@ -3,59 +3,43 @@
     import MagnifyingGlass from "phosphor-svelte/lib/MagnifyingGlass";
     import Plus from "phosphor-svelte/lib/Plus";
     import { onMount } from "svelte";
+    import JobSearch from "../../databases/JobSearch.svelte";
 
-    import { Command } from "bits-ui";
 
     import { Button } from "$lib/components/ui/button/index.js";
     import { Badge } from "$lib/components/ui/badge/index.js";  
 
-    // Props
-    export let live;
+    const { live, jobs = [], loading = false } = $props();
 
-    export let jobs = [];
-    export let loading = false;
-    export let selectedJobId = null;
+    let selectedJobId = $state(null);
     
     // Local state
-    let searchTerm = '';
-    let activeOnly = true; // Default to showing only active jobs
-    let showFilters = false;
+    let searchTerm = $state('');
+    let activeOnly = $state(false);
+    let showFilters = $state(false);
     let listElement;
     let isScrolling = false;
     let scrollTimeout;
     
-    // Log jobs when component mounts
-    onMount(() => {
-      console.log('JobList mounted with jobs:', jobs);
+
+    // Filtered inquiries using $derived
+    const filteredJobs = $derived(
+        jobs.filter(job => {
+          if (!job?.title) return false;
+          
+          const matchesSearch = !searchTerm || 
+            job.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            job.description?.toLowerCase().includes(searchTerm.toLowerCase());
+
+          return matchesSearch;
+        })
+      );
       
-      // Clean up on component destroy
-      return () => {
-        if (scrollTimeout) {
-          clearTimeout(scrollTimeout);
-        }
-      };
-    });
-    
-    // Filter jobs based on search and filters
-    $: filteredJobs = jobs.filter(job => {
-      // Ensure job has the expected properties
-      if (!job || !job.title) {
-        console.warn('Invalid job object:', job);
-        return false;
-      }
-      
-      // Search filter
-      const matchesSearch = searchTerm === '' || 
-        job.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        job.description?.toLowerCase().includes(searchTerm.toLowerCase());
-      
-  
-      // Active filter (Temporarily removed for debugging)
-      // const matchesActive = !activeOnly || job.is_active;
-      
-      // return matchesSearch && matchesActive;
-      return matchesSearch; // Only apply search filter for now
-    });
+    // Filtered count for the footer
+    const filteredCount = $derived(filteredJobs.length);
+    const totalCount = $derived(jobs.length);
+
+
     
     // Handle template selection
     function selectJob(id) {
@@ -87,25 +71,6 @@
       activeOnly = false;
     }
     
-    // Format date for display
-    function formatDate(dateString) {
-      if (!dateString) return 'N/A';
-      
-      try {
-        const date = new Date(dateString);
-        // Check if date is valid
-        if (isNaN(date.getTime())) return 'Invalid date';
-        
-        return new Intl.DateTimeFormat('en-GB', {
-          day: '2-digit',
-          month: 'short',
-          year: 'numeric'
-        }).format(date);
-      } catch (error) {
-        console.error('Error formatting date:', error);
-        return 'Invalid date';
-      }
-    }
 
     // Map job status to badge variant (similar to JobDetail)
     function getStatusVariant(status: string): "default" | "secondary" | "destructive" | "failed" | "pending" | "in_progress" | "complete" | "official" {
@@ -127,14 +92,10 @@
     <div class="interface-search pb-3">
       <div class="flex items-center w-full">
         <div class="flex-1 mr-2">
-          <Command.Root class="w-full">
-            <Command.Input 
-              class="focus-override h-input placeholder:text-foreground-alt/50 focus:outline-hidden bg-background inline-flex truncate w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:ring-primary-500 focus:border-primary-500"
-              placeholder="Search templates..." 
-              bind:value={searchTerm}
-            />
-            <!-- We only need the input for now, Command.List etc. are not required for this use case -->
-          </Command.Root>
+          <JobSearch 
+            bind:searchTerm 
+            placeholder="Search jobs..." 
+          />
         </div>
         
         <div class="flex gap-2 flex-shrink-0">
@@ -197,18 +158,24 @@
           {/if}
         </div>
       {:else}
-        <ul class="pb-2 w-full">
+        <ul class="space-y-2 pb-2"> 
           {#each filteredJobs as job (job.id)}
             <li>
-              <Button 
-                variant={selectedJobId === job.id ? 'list_item_active' : 'list_item_inactive'} 
-                size="item"
+              <button 
+                class="w-full text-left p-3 rounded-lg border transition-colors duration-150 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-300" 
+                class:bg-primary-50={selectedJobId === job.id}
+                class:border-primary-300={selectedJobId === job.id}
+                class:border-gray-200={selectedJobId !== job.id}
                 onclick={() => selectJob(job.id)}
               >
-                <div class="flex justify-between items-center"> 
-                  <div class="flex-grow mr-4"> 
-                    <div class="font-medium text-gray-900">{job.title}</div>
-                    <div class="text-sm text-gray-500 mt-1">{job.employer || '-'}</div>
+                <div class="flex justify-between items-center">
+                  <div class="flex-grow mr-4">
+                    <div class="font-medium text-gray-900">
+                      {job.title}
+                    </div>
+                    <div class="text-sm text-gray-500 mt-1">
+                      {job.employer || '-'}
+                    </div>
                   </div>
                   {#if job.status} 
                     <Badge 
@@ -219,7 +186,7 @@
                     </Badge>
                   {/if}
                 </div>
-              </Button>
+              </button>
             </li>
           {/each}
         </ul>

@@ -8,6 +8,7 @@
             "$lib/*": ["svelte/*"]
         },
         "moduleResolution": "bundler",
+        "allowArbitraryExtensions": true,
         "target": "ESNext",
         "module": "ESNext",
         "allowJs": true,
