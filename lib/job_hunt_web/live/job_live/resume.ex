@@ -3,7 +3,6 @@ defmodule JobHuntWeb.JobLive.Resume do
   use LiveSvelte.Components
   # Assuming a Context module exists for Resumes
   alias JobHunt.Resume.Context
-  alias JobHunt.Resume # Alias the main Ecto schema
 
   @impl true
   def mount(_params, _session, socket) do
