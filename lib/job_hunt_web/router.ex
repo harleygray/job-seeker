@@ -18,7 +18,7 @@ defmodule JobHuntWeb.Router do
     pipe_through :browser
 
     live "/", JobLive.Interface
-    live "/resume", JobLive.Resume
+    live "/resume", JobLive.Resume, :resume
 
   end
 

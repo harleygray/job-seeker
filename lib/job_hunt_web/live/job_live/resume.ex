@@ -1,4 +1,4 @@
-defmodule JobHuntWeb.ResumeLive do
+defmodule JobHuntWeb.JobLive.Resume do
   use JobHuntWeb, :live_view
   use LiveSvelte.Components
   # Assuming a Context module exists for Resumes
@@ -7,6 +7,8 @@ defmodule JobHuntWeb.ResumeLive do
 
   @impl true
   def mount(_params, _session, socket) do
+    IO.inspect(socket.assigns.live_action, label: "Live Action in mount")
+
     socket =
       socket
       |> assign(:page_title, "Resumes")
@@ -24,37 +26,41 @@ defmodule JobHuntWeb.ResumeLive do
 
   @impl true
   def render(assigns) do
+    IO.inspect(assigns.live_action, label: "Live Action in render")
     ~H"""
     <div id="resume-container" class="h-screen flex flex-col bg-gray-50">
       <div class="z-50">
-        <.safe_svelte name="Navbar" socket={@socket} />
+        <.safe_svelte name="Navbar" socket={@socket} props={%{currentPath: "/resume"}} />
       </div>
 
       <div class="h-full flex overflow-hidden">
         <!-- Resume List (1/4 width) -->
         <.safe_svelte
-            name="admin/components/ResumeList" # Use ResumeList component
+            name="admin/components/ResumeList"
             props={
               %{
-                resumes: @resumes, # Pass resumes data
-                selectedResumeId: @selected_resume_id # Pass selected resume ID
+                resumes: @resumes,
+                selectedResumeId: @selected_resume_id
               }
             }
             socket={@socket}
             class="w-1/4"
           />
 
-          <.safe_svelte
-            name="admin/components/ResumeDetail" # Use ResumeDetail component
-            props={%{
-              selectedResume: @selected_resume, # Pass selected resume data
-              creatingResume: @creating_resume # Pass creation state
-            }}
+        <!-- Resume Detail (3/4 width) -->
+        <.safe_svelte
+            name="admin/components/ResumeDetail"
+            props={
+              %{
+                selectedResume: @selected_resume,
+                creatingResume: @creating_resume
+              }
+            }
             socket={@socket}
             class="w-3/4"
           />
-        </div>
       </div>
+    </div>
     """
   end
 
@@ -115,7 +121,7 @@ defmodule JobHuntWeb.ResumeLive do
         socket =
           socket
           |> assign(:creating_resume, false)
-          |> assign(:selected_resume_id, resume.id) # Assuming resume has an id
+          |> assign(:selected_resume_id, resume.id)
           |> assign(:selected_resume, encoded_resume)
           |> put_flash(:info, "Resume created successfully.")
 

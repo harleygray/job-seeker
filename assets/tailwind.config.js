@@ -40,12 +40,12 @@ const config = {
 				background: "hsl(226 55% 98% / <alpha-value>)",
 				foreground: "hsl(226 61% 4% / <alpha-value>)",
 				primary: {
-					DEFAULT: "hsl(226 83% 42% / <alpha-value>)",
+					DEFAULT: "hsl(240 100% 27% / <alpha-value>)",
 					foreground: "hsl(0 0% 100% / <alpha-value>)",
 				},
 				secondary: {
-					DEFAULT: "hsl(226 43% 92% / <alpha-value>)",
-					foreground: "hsl(226 5% 3% / <alpha-value>)"
+					DEFAULT: "hsl(0 0% 100% / <alpha-value>)",
+					foreground: "hsl(240 100% 27% / <alpha-value>)"
 				},
 				destructive: {
 					DEFAULT: "hsl(0 86% 40% / <alpha-value>)",

@@ -1,10 +1,11 @@
-import type { Button as ButtonPrimitive } from "bits-ui";
 import { type VariantProps, tv } from "tailwind-variants";
 import Root from "./button.svelte";
-import type { ButtonRootProps } from "bits-ui";
+// Remove bits-ui import as Props/Events are not exported as expected
+// import { Button as ButtonPrimitive } from "bits-ui";
+import type { HTMLAnchorAttributes, HTMLButtonAttributes } from "svelte/elements";
 
 const buttonVariants = tv({
-	base: "focus-visible:ring-ring inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 disabled:pointer-events-none disabled:opacity-50",
+	base: "focus-visible:ring-ring inline-flex items-center justify-center whitespace-nowrap text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 disabled:pointer-events-none disabled:opacity-50",
 	variants: {
 		variant: {
 			default: "bg-primary text-primary-foreground hover:bg-primary/90 shadow",
@@ -18,16 +19,14 @@ const buttonVariants = tv({
 			next_page: "",
 			prev_page: "",
 			pagination: "h-8 w-8 border border-input bg-background hover:bg-accent hover:text-accent-foreground p-0",
-			_list_item_base: "text-left p-3 border rounded-lg focus:outline-none",
-			list_item_active: "_list_item_base bg-primary-50 border-primary-300 hover:bg-primary-100 text-primary-800 outline outline-2 outline-offset-1 outline-[var(--color-ring)] transition-none",
-			list_item_inactive: "_list_item_base bg-background border-gray-200 text-gray-700 hover:bg-gray-50 transition-none",
+			action_primary: "bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg",
+			action_secondary: "bg-secondary text-secondary-foreground hover:bg-primary/10 rounded-lg border border-secondary-foreground",
 		},
 		size: {
 			default: "h-9 px-4 py-2",
 			sm: "h-8 rounded-md px-3 text-xs",
 			lg: "h-10 rounded-md px-8",
 			icon: "h-9 w-9",
-			item: "h-10 w-full",
 		},
 	},
 	defaultVariants: {
@@ -39,20 +38,34 @@ const buttonVariants = tv({
 type Variant = VariantProps<typeof buttonVariants>["variant"];
 type Size = VariantProps<typeof buttonVariants>["size"];
 
-type Props = ButtonRootProps & {
+// Define Props based on button.svelte's $props definition
+type Props = {
+	href?: HTMLAnchorAttributes['href'];
+	type?: HTMLButtonAttributes['type'];
 	variant?: Variant;
 	size?: Size;
-};
+	class?: string;
+	disabled?: boolean;
+	ref?: HTMLButtonElement | HTMLAnchorElement | null; // Ref type from button.svelte
+	children?: any; // Children can be any type
+} & Omit<HTMLButtonAttributes & HTMLAnchorAttributes, "type" | "href" | "class" | "disabled">; // Include rest props, omit handled ones
 
-type Events = Parameters<ButtonRootProps["onclick"]>[0];
+
+// Remove explicit Events definition. Event handlers will be passed via {...restProps}
+// type Events = {
+//   click: MouseEvent;
+// };
 
 export {
 	Root,
 	type Props,
-	type Events,
-	//
+	// Remove Events export
+	// type Events,
+	// Re-export variants if needed by consumers
+	buttonVariants,
+	// Keep aliases for compatibility if necessary
 	Root as Button,
 	type Props as ButtonProps,
-	type Events as ButtonEvents,
-	buttonVariants,
+	// Remove Events alias export
+	// type Events as ButtonEvents,
 };

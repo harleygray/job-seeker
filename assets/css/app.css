@@ -1,26 +1,34 @@
 @import "tailwindcss";
 @config "../tailwind.config.js";
 
-@theme {
+@utility base {
 
-    --color-background: hsl(0 0% 100%);
-    --color-foreground: hsl(222.2 84% 4.9%);
-    --color-card: hsl(0 0% 100%);
-    --color-card-foreground: hsl(222.2 84% 4.9%);
-    --color-popover: hsl(0 0% 100%);
-    --color-popover-foreground: hsl(222.2 84% 4.9%);
-    --color-primary: hsl(221.2 83.2% 53.3%);
-    --color-primary-foreground: hsl(210 40% 98%);
-    --color-secondary: hsl(210 40% 96.1%);
-    --color-secondary-foreground: hsl(222.2 47.4% 11.2%);
-    --color-muted: hsl(210 40% 96.1%);
-    --color-muted-foreground: hsl(215.4 16.3% 46.9%);
-    --color-accent: hsl(210 40% 96.1%);
-    --color-accent-foreground: hsl(222.2 47.4% 11.2%);
-    --color-destructive: hsl(0 72.22% 50.59%);
-    --color-destructive-foreground: hsl(210 40% 98%);
-    --color-border: hsl(214.3 31.8% 91.4%);
-    --color-input: hsl(214.3 31.8% 91.4%);
-    --color-ring: hsl(221.2 83.2% 53.3%);
+
+  /* Enhanced Global Typography */
+  h1 {
+    @apply text-4xl font-extrabold tracking-tight lg:text-5xl;
+  }
+
+  h2 {
+    @apply mt-10 text-3xl font-semibold tracking-tight transition-colors;
+  }
+
+  h3 {
+    @apply text-2xl font-semibold tracking-tight break-words;
+  }
+
+  h4 {
+    @apply text-xl font-semibold tracking-tight;
+  }
+
+  p {
+    /* The 'leading-7' utility class sets the line-height to 1.75, which improves readability by providing adequate spacing between lines of text. */
+    @apply leading-7;
+  }
+
+  blockquote {
+    @apply mt-6 border-l-2 pl-6 italic;
+  }
+
 
 }

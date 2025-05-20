@@ -25,7 +25,7 @@ defmodule JobHuntWeb.JobLive.Interface do
     ~H"""
     <div id="interface-container" class="h-screen flex flex-col bg-gray-50">
       <div class="z-50">
-        <.safe_svelte name="Navbar" socket={@socket} />
+        <.safe_svelte name="Navbar" socket={@socket} currentPath="/" />
       </div>
 
       <div class="h-full flex overflow-hidden">

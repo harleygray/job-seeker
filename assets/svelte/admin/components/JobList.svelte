@@ -2,10 +2,10 @@
     import Funnel from "phosphor-svelte/lib/Funnel";
     import MagnifyingGlass from "phosphor-svelte/lib/MagnifyingGlass";
     import Plus from "phosphor-svelte/lib/Plus";
-    import { onMount } from "svelte";
+    import CircleNotch from "phosphor-svelte/lib/CircleNotch";
     import JobSearch from "../../databases/JobSearch.svelte";
 
-
+    import * as Select from "$lib/components/ui/select/index.js";
     import { Button } from "$lib/components/ui/button/index.js";
     import { Badge } from "$lib/components/ui/badge/index.js";  
 
@@ -15,14 +15,23 @@
     
     // Local state
     let searchTerm = $state('');
-    let activeOnly = $state(false);
+    let filterStatus = $state('all');
     let showFilters = $state(false);
     let listElement;
-    let isScrolling = false;
-    let scrollTimeout;
-    
 
-    // Filtered inquiries using $derived
+    // Status options for the select
+    const statusOptions = [
+        { value: 'all', label: 'All Statuses' },
+        { value: 'active', label: 'Active' },
+        { value: 'archived', label: 'Archived' }
+    ];
+
+    // Get the display text for the currently selected value
+    const statusTriggerContent = $derived(
+        statusOptions.find((f) => f.value === filterStatus)?.label ?? 'Select Status'
+    );
+
+    // Filtered jobs using $derived
     const filteredJobs = $derived(
         jobs.filter(job => {
           if (!job?.title) return false;
@@ -31,16 +40,16 @@
             job.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
             job.description?.toLowerCase().includes(searchTerm.toLowerCase());
 
-          return matchesSearch;
+          const matchesStatus = filterStatus === 'all' || job.status?.toLowerCase() === filterStatus.toLowerCase();
+
+          return matchesSearch && matchesStatus;
         })
-      );
+    );
       
     // Filtered count for the footer
     const filteredCount = $derived(filteredJobs.length);
     const totalCount = $derived(jobs.length);
 
-
-    
     // Handle template selection
     function selectJob(id) {
       if (live) {
@@ -68,138 +77,181 @@
     // Clear all filters
     function clearFilters() {
       searchTerm = '';
-      activeOnly = false;
+      filterStatus = 'all';
     }
     
-
-    // Map job status to badge variant (similar to JobDetail)
+    // Map job status to badge variant
     function getStatusVariant(status: string): "default" | "secondary" | "destructive" | "failed" | "pending" | "in_progress" | "complete" | "official" {
         const lowerStatus = status?.toLowerCase() || 'active'; 
         switch (lowerStatus) {
             case 'active':
-                return 'complete'; // Use 'complete' (green) for Active
+                return 'complete';
             case 'archived':
-                return 'secondary'; // Use 'secondary' (gray) for Archived
+                return 'secondary';
             default:
                 return 'default'; 
         }
     }
-
-  </script>
+</script>
   
-  <div class="flex flex-col h-full bg-white border-r border-blue-300 overflow-hidden pt-3">
+<div class="job-container">
     <!-- Search and filter bar -->
-    <div class="interface-search pb-3">
-      <div class="flex items-center w-full">
-        <div class="flex-1 mr-2">
-          <JobSearch 
-            bind:searchTerm 
-            placeholder="Search jobs..." 
-          />
-        </div>
-        
-        <div class="flex gap-2 flex-shrink-0">
-          <Button onclick={() => toggleFilters()} class="relative">
-            <Funnel class="w-4 h-4" />
-          </Button>
-  
-          <Button 
-            onclick={() => createNewJob()}
-            variant="default"
-            disabled={loading}
-          >
-
-            <Plus class="w-4 h-4"/>
-
-          </Button>
-        </div>
-      </div>
-      
-      <!-- Expandable filters -->
-      {#if showFilters}
-        <div class="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200 animate-fade-in">
-          <div class="space-y-3">
-            <div class="flex items-center">
-              <input
-                type="checkbox"
-                id="active-filter"
-                bind:checked={activeOnly}
-                class="w-4 h-4 text-blue-600 bg-gray-100 rounded border-gray-300 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-600 dark:bg-gray-700 dark:border-gray-600"
-              />
-              <label for="active-filter" class="ml-2 text-sm font-medium text-gray-700">
-                Active templates only
-              </label>
+    <div class="job-search">
+        <div class="flex items-center w-full">
+            <div class="flex-1 mr-2">
+                <JobSearch
+                    bind:searchTerm
+                    placeholder="Search jobs..."
+                />
             </div>
-          </div>
 
+            <div class="flex gap-2 flex-shrink-0">
+                <Button
+                    variant="action_secondary"
+                    size="sm"
+                    onclick={toggleFilters}
+                >
+                    <Funnel class="w-5 h-5 font-bold" />
+                </Button>
+
+                <Button
+                    variant="action_primary"
+                    size="sm"
+                    onclick={createNewJob}
+                    disabled={loading}
+                >
+                    <Plus class="w-5 h-5 font-bold" />
+                </Button>
+            </div>
         </div>
-      {/if}
+
+        <!-- Expandable filters -->
+        {#if showFilters}
+            <div class="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200 animate-fade-in">
+                <div class="space-y-3">
+                    <div class="w-full">
+                        <Select.Root type="single" bind:value={filterStatus}>
+                            <Select.Trigger class="w-full">
+                                {statusTriggerContent}
+                            </Select.Trigger>
+                            <Select.Content>
+                                {#each statusOptions as option}
+                                    <Select.Item value={option.value}>
+                                        {option.label}
+                                    </Select.Item>
+                                {/each}
+                            </Select.Content>
+                        </Select.Root>
+                    </div>
+                </div>
+
+                <div class="mt-3 flex justify-end">
+                    <Button variant="outline" size="sm" onclick={clearFilters}>
+                        Clear Filters
+                    </Button>
+                </div>
+            </div>
+        {/if}
     </div>
     
-    <div
-      class="flex-1 overflow-y-auto px-3"
-      class:scrolling={isScrolling}
-      bind:this={listElement}
-    >
-      {#if searchTerm && filteredJobs.length > 0}
-        <div class="px-3 py-2 text-sm text-gray-500">
-          Searching for: <span class="font-medium text-gray-700">{searchTerm}</span>
-        </div>
-      {/if}
-
-
-      {#if filteredJobs.length === 0}
-        <div class="flex flex-col items-center justify-center h-full text-gray-500">
-          <p>No jobs found</p>
-          {#if searchTerm}
-            <Button class="mt-2" onclick={() => clearFilters()}>
-              Clear Filters
-            </Button>
-          {/if}
-        </div>
-      {:else}
-        <ul class="space-y-2 pb-2"> 
-          {#each filteredJobs as job (job.id)}
-            <li>
-              <button 
-                class="w-full text-left p-3 rounded-lg border transition-colors duration-150 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-300" 
-                class:bg-primary-50={selectedJobId === job.id}
-                class:border-primary-300={selectedJobId === job.id}
-                class:border-gray-200={selectedJobId !== job.id}
-                onclick={() => selectJob(job.id)}
-              >
-                <div class="flex justify-between items-center">
-                  <div class="flex-grow mr-4">
-                    <div class="font-medium text-gray-900">
-                      {job.title}
-                    </div>
-                    <div class="text-sm text-gray-500 mt-1">
-                      {job.employer || '-'}
-                    </div>
-                  </div>
-                  {#if job.status} 
-                    <Badge 
-                      variant={getStatusVariant(job.status)} 
-                      class="text-xs flex-shrink-0 capitalize"
+    <div class="job-list flex-1 overflow-y-auto px-4 pt-2 pb-0" bind:this={listElement}>
+        {#if loading}
+            <div class="flex justify-center items-center h-full">
+                <CircleNotch class="w-8 h-8 animate-spin text-gray-500" />
+            </div>
+        {:else if filteredJobs.length === 0}
+            <div class="flex flex-col items-center justify-center h-full text-gray-500">
+                <p>No jobs found</p>
+                {#if searchTerm || filterStatus !== "all"}
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        class="mt-2"
+                        onclick={clearFilters}
                     >
-                      {job.status}
-                    </Badge>
-                  {/if}
-                </div>
-              </button>
-            </li>
-          {/each}
-        </ul>
-      {/if}
+                        Clear Filters
+                    </Button>
+                {/if}
+            </div>
+        {:else}
+            <ul class="space-y-2 pb-2">
+                {#each filteredJobs as job (job.id)}
+                    <li>
+                        <button 
+                            class="w-full text-left p-3 rounded-lg border transition-colors duration-150 hover:bg-gray-50 focus:outline-none focus:ring focus:ring-primary-300"
+                            class:bg-primary-50={selectedJobId === job.id}
+                            class:border-primary-300={selectedJobId === job.id}
+                            class:border-gray-200={selectedJobId !== job.id}
+                            onclick={() => selectJob(job.id)}
+                        >
+                            <div class="flex justify-between items-start">
+                                <div class="flex-grow">
+                                    <div class="font-medium text-gray-900">
+                                        {job.title}
+                                    </div>
+                                    <div class="text-sm text-gray-600 mt-1">
+                                        <span class="inline-block mr-2">
+                                            {job.employer || '-'}
+                                        </span>
+                                    </div>
+                                </div>
+                                {#if job.status}
+                                    <Badge 
+                                        variant={getStatusVariant(job.status)}
+                                        class="text-xs flex-shrink-0 capitalize"
+                                    >
+                                        {job.status}
+                                    </Badge>
+                                {/if}
+                            </div>
+                        </button>
+                    </li>
+                {/each}
+            </ul>
+        {/if}
     </div>
     
     <!-- Status bar - fixed at bottom -->
-    <div class="flex justify-end items-center px-4 py-6 border-t border-gray-200 bg-primary-200 text-sm text-gray-600">
-      <span>
-        {filteredJobs.length} of {jobs.length} jobs
-        {#if activeOnly}
-          <span class="text-green-600">(showing active only)</span>
-        {/if}
-      </span>
+    <div class="job-footer">
+        <span>
+            {filteredJobs.length} of {jobs.length} jobs
+            {#if filterStatus !== 'all'}
+                <span class="text-green-600">(showing {filterStatus === 'active' ? 'active' : 'archived'} only)</span>
+            {/if}
+        </span>
     </div>
-  </div>
+</div>
+
+<style>
+    /* Main container */
+    .job-container {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        background-color: white;
+        border-right: 1px solid #93c5fd;
+    }
+
+    /* Search area */
+    .job-search {
+        padding: 16px 16px 12px 16px;
+    }
+
+    /* List area */
+    .job-list {
+        flex: 1;
+        overflow-y: auto;
+    }
+
+    /* Footer */
+    .job-footer {
+        display: flex;
+        justify-content: right;
+        align-items: center;
+        padding: 24px 16px;
+        border-top: 1px solid #e5e7eb;
+        background-color: primary-200;
+        font-size: 0.875rem;
+        color: #4b5563;
+    }
+</style>

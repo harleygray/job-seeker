@@ -26,6 +26,7 @@ defmodule JobHunt.MixProject do
     [
       {:phoenix, "~> 1.7.19"},
       {:phoenix_ecto, "~> 4.4"},
+      {:tidewave, "~> 0.1.6", only: :dev},
       {:live_svelte, "~> 0.16.0"},
       {:ecto_sql, "~> 3.10"},
       {:postgrex, ">= 0.0.0"},
