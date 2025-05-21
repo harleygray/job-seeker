@@ -4,6 +4,7 @@ defmodule JobHunt.Resume.Project do
 
   @primary_key false
   embedded_schema do
+    field :id, :string
     field :name, :string
     field :description, :string
     field :technologies, {:array, :string}, default: []
@@ -13,6 +14,7 @@ defmodule JobHunt.Resume.Project do
   def changeset(project, attrs) do
     project
     |> cast(attrs, [
+      :id,
       :name,
       :description,
       :technologies,

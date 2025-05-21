@@ -4,6 +4,7 @@ defmodule JobHunt.Resume.Experience do
 
   @primary_key false
   embedded_schema do
+    field :id, :string
     field :company, :string
     field :positions, {:array, :string}
     field :start_date, :date
@@ -16,6 +17,7 @@ defmodule JobHunt.Resume.Experience do
   def changeset(experience, attrs) do
     experience
     |> cast(attrs, [
+      :id,
       :company,
       :positions,
       :start_date,

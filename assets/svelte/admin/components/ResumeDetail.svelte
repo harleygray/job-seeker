@@ -4,6 +4,10 @@
     import Plus from "phosphor-svelte/lib/Plus";
     import { Badge } from "$lib/components/ui/badge/index.js";  
     import { Root, Trigger, Content } from "$lib/components/ui/popover/index.js";
+    import ResumeExperience from "../../databases/ResumeExperience.svelte";
+    import ResumeEducation from "../../databases/ResumeEducation.svelte";
+    import ResumeProjects from "../../databases/ResumeProjects.svelte";
+    import ResumeSkills from "../../databases/ResumeSkills.svelte";
 
     // Props from LiveView
     export let live;
@@ -25,25 +29,30 @@
     // Sync form data when selectedResume or creatingResume changes
     $: {
         if (creatingResume) {
-            console.log("Creating new resume, enabling edit mode.");
             editMode = true;
-            formData = {
-                experience: [],
-                education: [],
-                projects: [],
-                skills: []
-            };
-            selectedResume = null;
+            // If selectedResume is provided by the server (even during creation), its data should populate formData.
+            // Otherwise (e.g., initial click on "Create New"), initialize formData for a truly new resume.
+            if (selectedResume && typeof selectedResume === 'object' && Object.keys(selectedResume).length > 0) {
+                formData.experience = selectedResume.experience || [];
+                formData.education = selectedResume.education || [];
+                formData.projects = selectedResume.projects || [];
+                formData.skills = selectedResume.skills || [];
+            } else if (!selectedResume) { // Only reset if selectedResume is explicitly null/undefined
+                formData = {
+                    experience: [],
+                    education: [],
+                    projects: [],
+                    skills: []
+                };
+            }
+            // DO NOT set selectedResume = null here; let it be driven by the server.
         } else if (selectedResume) {
-            console.log("Selected resume updated:", selectedResume);
-            editMode = false;
-            formData = {
-                experience: selectedResume.experience || [],
-                education: selectedResume.education || [],
-                projects: selectedResume.projects || [],
-                skills: selectedResume.skills || []
-            };
-        } else {
+            editMode = false; // Or based on bind:checked
+            formData.experience = selectedResume.experience || [];
+            formData.education = selectedResume.education || [];
+            formData.projects = selectedResume.projects || [];
+            formData.skills = selectedResume.skills || [];
+        } else { // No resume selected, not creating
             editMode = false;
             formData = {
                 experience: [],
@@ -97,15 +106,42 @@
     // Add new item to a section
     function addItem(section: string) {
         const newItem = {
-            id: Date.now(), // Temporary ID for new items
+            id: Date.now().toString(), // Temporary ID for new items
             ...getEmptyItemForSection(section)
         };
+        console.log("Adding new item to section:", section, "with ID:", newItem.id);
         formData[section] = [...formData[section], newItem];
+        console.log("Updated formData for section:", section, formData[section]);
+        // Push the initial form data to ensure it's in the state
+        if (live) {
+            live.pushEvent("form_updated", { id: newItem.id, form: newItem });
+        }
     }
 
     // Remove item from a section
     function removeItem(section: string, index: number) {
-        formData[section] = formData[section].filter((_, i) => i !== index);
+        const itemToRemove = formData[section]?.[index];
+        if (itemToRemove && itemToRemove.id && live) {
+            let eventName = null;
+            switch (section) {
+                case 'experience':
+                    eventName = "remove_experience_item";
+                    break;
+                case 'education':
+                    eventName = "remove_education_item";
+                    break;
+                case 'projects':
+                    eventName = "remove_project_item";
+                    break;
+                case 'skills':
+                    eventName = "remove_skill_item";
+                    break;
+            }
+            if (eventName) {
+                live.pushEvent(eventName, { id: itemToRemove.id });
+            }
+        }
+        // No optimistic update here, let server drive the state
     }
 
     // Get empty item structure for each section
@@ -113,38 +149,43 @@
         switch (section) {
             case 'experience':
                 return {
-                    title: '',
                     company: '',
-                    location: '',
+                    positions: [],
                     start_date: '',
                     end_date: '',
-                    description: ''
+                    highlights: [],
+                    relevant_experience: [],
+                    technologies: []
                 };
             case 'education':
                 return {
-                    school: '',
-                    degree: '',
-                    field: '',
-                    start_date: '',
-                    end_date: '',
-                    description: ''
+                    institution: '',
+                    courses: [],
+                    highlights: []
                 };
             case 'projects':
                 return {
                     name: '',
                     description: '',
-                    technologies: '',
-                    url: ''
+                    technologies: [],
+                    highlights: []
                 };
             case 'skills':
                 return {
-                    name: '',
-                    level: '',
-                    category: ''
+                    category: '',
+                    items: []
                 };
             default:
                 return {};
         }
+    }
+
+    // Handle form updates from child components
+    $: if (live) {
+        live.handleEvent("form_updated", ({ id, form }) => {
+            console.log("Received form_updated event for ID:", id, "form:", form);
+            // ... rest of the handler
+        });
     }
 
     onMount(() => {
@@ -190,7 +231,7 @@
                     {#each ['experience', 'education', 'projects', 'skills'] as section}
                         <button
                             class="px-3 py-2 text-sm font-medium {activeSection === section ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500 hover:text-gray-700'}"
-                            on:click={() => activeSection = section}
+                            onclick={() => activeSection = section}
                         >
                             {section.charAt(0).toUpperCase() + section.slice(1)}
                             <Badge variant="secondary" class="ml-2">
@@ -207,7 +248,7 @@
                     <div class="flex justify-end">
                         <button
                             type="button"
-                            on:click={() => addItem(activeSection)}
+                            onclick={() => addItem(activeSection)}
                             class="flex items-center px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
                         >
                             <Plus class="w-4 h-4 mr-1" />
@@ -219,71 +260,21 @@
                 <!-- Experience Section -->
                 {#if activeSection === 'experience'}
                     <div class="space-y-4">
-                        {#each formData.experience as experience, index}
-                            <div class="p-4 border rounded-lg">
+                        {#each formData.experience as experienceItem, index (experienceItem.id)}
+                            <div class="p-4 rounded-lg">
                                 {#if editMode}
-                                    <div class="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Title</label>
-                                            <input
-                                                type="text"
-                                                bind:value={experience.title}
-                                                class="w-full p-2 border border-gray-300 rounded-md"
-                                                placeholder="Job Title"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Company</label>
-                                            <input
-                                                type="text"
-                                                bind:value={experience.company}
-                                                class="w-full p-2 border border-gray-300 rounded-md"
-                                                placeholder="Company Name"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                                            <input
-                                                type="text"
-                                                bind:value={experience.location}
-                                                class="w-full p-2 border border-gray-300 rounded-md"
-                                                placeholder="Location"
-                                            />
-                                        </div>
-                                        <div class="grid grid-cols-2 gap-2">
-                                            <div>
-                                                <label class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-                                                <input
-                                                    type="text"
-                                                    bind:value={experience.start_date}
-                                                    class="w-full p-2 border border-gray-300 rounded-md"
-                                                    placeholder="Start Date"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label class="block text-sm font-medium text-gray-700 mb-1">End Date</label>
-                                                <input
-                                                    type="text"
-                                                    bind:value={experience.end_date}
-                                                    class="w-full p-2 border border-gray-300 rounded-md"
-                                                    placeholder="End Date"
-                                                />
-                                            </div>
-                                        </div>
-                                        <div class="col-span-2">
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                                            <textarea
-                                                bind:value={experience.description}
-                                                rows="3"
-                                                class="w-full p-2 border border-gray-300 rounded-md"
-                                                placeholder="Job Description"
-                                            ></textarea>
-                                        </div>
-                                    </div>
+                                    <ResumeExperience
+                                        experience={experienceItem}
+                                        id={experienceItem.id}
+                                        errors={{}}
+                                        parent="resume-container"
+                                        live={live}
+                                        isEditing={editMode}
+                                    />
                                     <div class="mt-4 flex justify-end">
                                         <button
                                             type="button"
-                                            on:click={() => removeItem('experience', index)}
+                                            onclick={() => removeItem('experience', index)}
                                             class="text-red-600 hover:text-red-800"
                                         >
                                             Remove
@@ -292,11 +283,11 @@
                                 {:else}
                                     <div class="space-y-2">
                                         <div class="flex justify-between">
-                                            <h3 class="text-lg font-medium">{experience.title}</h3>
-                                            <span class="text-gray-500">{experience.start_date} - {experience.end_date}</span>
+                                            <h3 class="text-lg font-medium">{experienceItem.title}</h3>
+                                            <span class="text-gray-500">{experienceItem.start_date} - {experienceItem.end_date}</span>
                                         </div>
-                                        <div class="text-gray-600">{experience.company} • {experience.location}</div>
-                                        <p class="text-gray-700 whitespace-pre-wrap">{experience.description}</p>
+                                        <div class="text-gray-600">{experienceItem.company} • {experienceItem.location}</div>
+                                        <p class="text-gray-700 whitespace-pre-wrap">{experienceItem.description}</p>
                                     </div>
                                 {/if}
                             </div>
@@ -306,71 +297,21 @@
                 <!-- Education Section -->
                 {:else if activeSection === 'education'}
                     <div class="space-y-4">
-                        {#each formData.education as education, index}
+                        {#each formData.education as educationItem, index (educationItem.id)}
                             <div class="p-4 border rounded-lg">
                                 {#if editMode}
-                                    <div class="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">School</label>
-                                            <input
-                                                type="text"
-                                                bind:value={education.school}
-                                                class="w-full p-2 border border-gray-300 rounded-md"
-                                                placeholder="School Name"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Degree</label>
-                                            <input
-                                                type="text"
-                                                bind:value={education.degree}
-                                                class="w-full p-2 border border-gray-300 rounded-md"
-                                                placeholder="Degree"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Field</label>
-                                            <input
-                                                type="text"
-                                                bind:value={education.field}
-                                                class="w-full p-2 border border-gray-300 rounded-md"
-                                                placeholder="Field of Study"
-                                            />
-                                        </div>
-                                        <div class="grid grid-cols-2 gap-2">
-                                            <div>
-                                                <label class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-                                                <input
-                                                    type="text"
-                                                    bind:value={education.start_date}
-                                                    class="w-full p-2 border border-gray-300 rounded-md"
-                                                    placeholder="Start Date"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label class="block text-sm font-medium text-gray-700 mb-1">End Date</label>
-                                                <input
-                                                    type="text"
-                                                    bind:value={education.end_date}
-                                                    class="w-full p-2 border border-gray-300 rounded-md"
-                                                    placeholder="End Date"
-                                                />
-                                            </div>
-                                        </div>
-                                        <div class="col-span-2">
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                                            <textarea
-                                                bind:value={education.description}
-                                                rows="3"
-                                                class="w-full p-2 border border-gray-300 rounded-md"
-                                                placeholder="Additional Information"
-                                            ></textarea>
-                                        </div>
-                                    </div>
+                                    <ResumeEducation
+                                        education={educationItem}
+                                        id={educationItem.id}
+                                        errors={{}}
+                                        parent="resume-container"
+                                        live={live}
+                                        isEditing={editMode}
+                                    />
                                     <div class="mt-4 flex justify-end">
                                         <button
                                             type="button"
-                                            on:click={() => removeItem('education', index)}
+                                            onclick={() => removeItem('education', index)}
                                             class="text-red-600 hover:text-red-800"
                                         >
                                             Remove
@@ -379,11 +320,25 @@
                                 {:else}
                                     <div class="space-y-2">
                                         <div class="flex justify-between">
-                                            <h3 class="text-lg font-medium">{education.school}</h3>
-                                            <span class="text-gray-500">{education.start_date} - {education.end_date}</span>
+                                            <h3 class="text-lg font-medium">{educationItem.institution}</h3>
                                         </div>
-                                        <div class="text-gray-600">{education.degree} in {education.field}</div>
-                                        <p class="text-gray-700 whitespace-pre-wrap">{education.description}</p>
+                                        {#if educationItem.courses?.length > 0}
+                                            <div class="text-gray-600">
+                                                {#each educationItem.courses as course}
+                                                    <div>{course}</div>
+                                                {/each}
+                                            </div>
+                                        {/if}
+                                        {#if educationItem.highlights?.length > 0}
+                                            <div class="text-gray-700">
+                                                {#each educationItem.highlights as highlight}
+                                                    <div class="flex items-start gap-2">
+                                                        <span class="text-gray-500">•</span>
+                                                        <span>{highlight}</span>
+                                                    </div>
+                                                {/each}
+                                            </div>
+                                        {/if}
                                     </div>
                                 {/if}
                             </div>
@@ -393,51 +348,21 @@
                 <!-- Projects Section -->
                 {:else if activeSection === 'projects'}
                     <div class="space-y-4">
-                        {#each formData.projects as project, index}
+                        {#each formData.projects as project, index (project.id)}
                             <div class="p-4 border rounded-lg">
                                 {#if editMode}
-                                    <div class="space-y-4">
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Project Name</label>
-                                            <input
-                                                type="text"
-                                                bind:value={project.name}
-                                                class="w-full p-2 border border-gray-300 rounded-md"
-                                                placeholder="Project Name"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                                            <textarea
-                                                bind:value={project.description}
-                                                rows="3"
-                                                class="w-full p-2 border border-gray-300 rounded-md"
-                                                placeholder="Project Description"
-                                            ></textarea>
-                                        </div>
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Technologies</label>
-                                            <input
-                                                type="text"
-                                                bind:value={project.technologies}
-                                                class="w-full p-2 border border-gray-300 rounded-md"
-                                                placeholder="Technologies Used"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Project URL</label>
-                                            <input
-                                                type="url"
-                                                bind:value={project.url}
-                                                class="w-full p-2 border border-gray-300 rounded-md"
-                                                placeholder="https://project-url.com"
-                                            />
-                                        </div>
-                                    </div>
+                                    <ResumeProjects
+                                        project={project}
+                                        id={project.id}
+                                        errors={{}}
+                                        parent="resume-container"
+                                        live={live}
+                                        isEditing={editMode}
+                                    />
                                     <div class="mt-4 flex justify-end">
                                         <button
                                             type="button"
-                                            on:click={() => removeItem('projects', index)}
+                                            onclick={() => removeItem('projects', index)}
                                             class="text-red-600 hover:text-red-800"
                                         >
                                             Remove
@@ -447,15 +372,22 @@
                                     <div class="space-y-2">
                                         <div class="flex justify-between items-start">
                                             <h3 class="text-lg font-medium">{project.name}</h3>
-                                            {#if project.url}
-                                                <a href={project.url} target="_blank" class="text-blue-600 hover:underline">View Project</a>
-                                            {/if}
                                         </div>
                                         <p class="text-gray-700 whitespace-pre-wrap">{project.description}</p>
-                                        {#if project.technologies}
+                                        {#if project.technologies?.length > 0}
                                             <div class="flex flex-wrap gap-2 mt-2">
-                                                {#each project.technologies.split(',').map(t => t.trim()) as tech}
+                                                {#each project.technologies as tech}
                                                     <Badge variant="secondary" class="text-xs">{tech}</Badge>
+                                                {/each}
+                                            </div>
+                                        {/if}
+                                        {#if project.highlights?.length > 0}
+                                            <div class="text-gray-700">
+                                                {#each project.highlights as highlight}
+                                                    <div class="flex items-start gap-2">
+                                                        <span class="text-gray-500">•</span>
+                                                        <span>{highlight}</span>
+                                                    </div>
                                                 {/each}
                                             </div>
                                         {/if}
@@ -468,54 +400,36 @@
                 <!-- Skills Section -->
                 {:else if activeSection === 'skills'}
                     <div class="space-y-4">
-                        {#each formData.skills as skill, index}
+                        {#each formData.skills as skill, index (skill.id)}
                             <div class="p-4 border rounded-lg">
                                 {#if editMode}
-                                    <div class="grid grid-cols-3 gap-4">
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Skill Name</label>
-                                            <input
-                                                type="text"
-                                                bind:value={skill.name}
-                                                class="w-full p-2 border border-gray-300 rounded-md"
-                                                placeholder="Skill Name"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Level</label>
-                                            <input
-                                                type="text"
-                                                bind:value={skill.level}
-                                                class="w-full p-2 border border-gray-300 rounded-md"
-                                                placeholder="Expertise Level"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                                            <input
-                                                type="text"
-                                                bind:value={skill.category}
-                                                class="w-full p-2 border border-gray-300 rounded-md"
-                                                placeholder="Skill Category"
-                                            />
-                                        </div>
-                                    </div>
+                                    <ResumeSkills
+                                        skill={skill}
+                                        id={skill.id}
+                                        errors={{}}
+                                        parent="resume-container"
+                                        live={live}
+                                        isEditing={editMode}
+                                    />
                                     <div class="mt-4 flex justify-end">
                                         <button
                                             type="button"
-                                            on:click={() => removeItem('skills', index)}
+                                            onclick={() => removeItem('skills', index)}
                                             class="text-red-600 hover:text-red-800"
                                         >
                                             Remove
                                         </button>
                                     </div>
                                 {:else}
-                                    <div class="flex justify-between items-center">
-                                        <div>
-                                            <h3 class="text-lg font-medium">{skill.name}</h3>
-                                            <div class="text-gray-600">{skill.category}</div>
-                                        </div>
-                                        <Badge variant="secondary">{skill.level}</Badge>
+                                    <div class="space-y-2">
+                                        <h3 class="text-lg font-medium">{skill.category}</h3>
+                                        {#if skill.items?.length > 0}
+                                            <div class="flex flex-wrap gap-2">
+                                                {#each skill.items as item}
+                                                    <Badge variant="secondary" class="text-xs">{item}</Badge>
+                                                {/each}
+                                            </div>
+                                        {/if}
                                     </div>
                                 {/if}
                             </div>
@@ -530,14 +444,14 @@
             <div class="flex justify-end gap-3 pt-4">
                 <button
                     type="button"
-                    on:click={cancelEdit}
+                    onclick={cancelEdit}
                     class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
                 >
                     Cancel
                 </button>
                 <button
                     type="button"
-                    on:click={saveResume}
+                    onclick={saveResume}
                     class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
                 >
                     {creatingResume ? 'Create Resume' : 'Save Changes'}
