@@ -15,7 +15,7 @@
         parent,
         live,
         isEditing = false,
-        id = ""
+        id = "" // Prop id for identifying component instance
     }: {
         project?: any;
         errors?: Record<string, any>;
@@ -27,6 +27,7 @@
 
     // Define form state type
     type FormState = {
+        id: string; // Ensure ID is part of the form state
         name: string;
         description: string;
         technologies: string[];
@@ -35,7 +36,9 @@
 
     // Initialize form state
     function initializeFormState(): FormState {
+        const itemId = project?.id ?? id ?? Date.now().toString();
         const state: FormState = {
+            id: itemId,
             name: project?.name ?? "",
             description: project?.description ?? "",
             technologies: project?.technologies ?? [],
@@ -48,34 +51,50 @@
     const fieldErrors = $derived(new Map(Object.entries(errors)));
 
     // Push event helper
-    function pushEvent(event: string, payload = {}) {
-        const finalPayload = event === "form_updated" && id ? { ...payload, id: id } : payload;
+    function pushEvent(event: string, payload: Record<string, any> = {}) {
+        let finalPayload;
+        if (event === "form_updated") {
+            finalPayload = { id: form.id, form: payload.form }; 
+        } else {
+            finalPayload = payload;
+        }
         live.pushEventTo(`#${parent}`, event, finalPayload);
     }
 
+    // Handle form field updates for simple text/textarea inputs
+    function updateField(fieldName: keyof Pick<FormState, 'name' | 'description'>, value: any) {
+        form[fieldName] = value;
+        form = { ...form }; 
+        pushEvent("form_updated", { form: $state.snapshot(form) });
+    }
+
     // Handle array field updates
-    function addArrayItem(fieldName: string) {
+    function addArrayItem(fieldName: keyof Pick<FormState, 'technologies' | 'highlights'>) {
         if (!form[fieldName]) {
             form[fieldName] = [];
         }
         form[fieldName] = [...form[fieldName], ""];
+        form = { ...form };
         pushEvent("form_updated", { form: $state.snapshot(form) });
     }
 
-    function removeArrayItem(fieldName: string, index: number) {
+    function removeArrayItem(fieldName: keyof Pick<FormState, 'technologies' | 'highlights'>, index: number) {
         form[fieldName] = form[fieldName].filter((_, i) => i !== index);
+        form = { ...form };
         pushEvent("form_updated", { form: $state.snapshot(form) });
     }
 
-    function updateArrayItem(fieldName: string, index: number, value: string) {
+    function updateArrayItem(fieldName: keyof Pick<FormState, 'technologies' | 'highlights'>, index: number, value: string) {
         form[fieldName][index] = value;
-        form[fieldName] = [...form[fieldName]]; // Trigger reactivity
+        form[fieldName] = [...form[fieldName]]; 
+        form = { ...form };
         pushEvent("form_updated", { form: $state.snapshot(form) });
     }
 
     // Expose clearForm for parent components
     export function clearForm() {
         form = {
+            id: Date.now().toString(), // Give new ID on clear
             name: "",
             description: "",
             technologies: [],
@@ -87,11 +106,12 @@
 <div class="space-y-4">
     <!-- Name field -->
     <div class="space-y-2">
-        <Label for="name">Project Name</Label>
+        <Label for={`name-${form.id}`}>Project Name</Label>
         <Input
             type="text"
-            id="name"
-            bind:value={form.name}
+            id={`name-${form.id}`}
+            value={form.name}
+            on:input={(e) => updateField("name", e.currentTarget.value)}
             placeholder="Enter project name"
         />
         {#if fieldErrors.has("name")}
@@ -103,12 +123,13 @@
 
     <!-- Description field -->
     <div class="space-y-2">
-        <Label for="description">Description</Label>
-        <Textarea
-            id="description"
-            bind:value={form.description}
+        <Label for={`description-${form.id}`}>Description</Label>
+        <Input
+            type="text"
+            id={`description-${form.id}`}
+            value={form.description}
+            on:input={(e) => updateField("description", e.currentTarget.value)}
             placeholder="Enter project description"
-            rows={3}
         />
         {#if fieldErrors.has("description")}
             <p class="text-destructive text-sm">
@@ -120,13 +141,13 @@
     <!-- Technologies and Highlights on same row -->
     <div class="flex gap-4">
         <div class="flex-1 space-y-2">
-            <Label for="technologies">Technologies</Label>
+            <Label for={`technologies-label-${form.id}`}>Technologies</Label>
             <div class="space-y-2">
-                {#each form.technologies as item, index}
+                {#each form.technologies as item, index (index)}
                     <div class="flex gap-2">
                         <Input
                             type="text"
-                            id={`technologies-${index}`}
+                            id={`technologies-${form.id}-${index}`}
                             value={item}
                             on:input={(e) => updateArrayItem("technologies", index, e.currentTarget.value)}
                             placeholder="Enter technology"
@@ -161,13 +182,13 @@
         </div>
 
         <div class="flex-1 space-y-2">
-            <Label for="highlights">Highlights</Label>
+            <Label for={`highlights-label-${form.id}`}>Highlights</Label>
             <div class="space-y-2">
-                {#each form.highlights as item, index}
+                {#each form.highlights as item, index (index)}
                     <div class="flex gap-2">
                         <Input
                             type="text"
-                            id={`highlights-${index}`}
+                            id={`highlights-${form.id}-${index}`}
                             value={item}
                             on:input={(e) => updateArrayItem("highlights", index, e.currentTarget.value)}
                             placeholder="Enter achievement or highlight"

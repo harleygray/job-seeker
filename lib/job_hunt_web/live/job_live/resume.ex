@@ -143,8 +143,20 @@ defmodule JobHuntWeb.JobLive.Resume do
     # Assuming Context.get_resume!/1 exists
     resume = Context.get_resume!(resume_id)
 
-    # Use all params except id for update
-    update_attrs = Map.delete(resume_params, "id")
+    # Get the current state from the socket
+    current_resume = socket.assigns.selected_resume
+
+    # Use all params except id for update, or use the current resume data if no params
+    update_attrs = if map_size(resume_params) > 1 do
+      Map.delete(resume_params, "id")
+    else
+      %{
+        "experience" => current_resume["experience"],
+        "education" => current_resume["education"],
+        "projects" => current_resume["projects"],
+        "skills" => current_resume["skills"]
+      }
+    end
 
     IO.inspect(update_attrs, label: "Attrs for Context.update_resume")
     # Assuming Context.update_resume/2 exists
@@ -173,12 +185,9 @@ defmodule JobHuntWeb.JobLive.Resume do
   @impl true
   def handle_event("form_updated", %{"id" => item_id, "form" => form_data}, socket) do
     item_id_str = to_string(item_id)
-    IO.puts("Form updated for ID: #{item_id_str}")
-    IO.inspect(form_data, label: "Form data")
 
     if socket.assigns.creating_resume do
       current_data = socket.assigns.selected_resume || %{"experience" => [], "education" => [], "projects" => [], "skills" => []}
-      IO.inspect(current_data, label: "Current data")
 
       # Find which section contains this ID
       section = cond do
@@ -188,8 +197,6 @@ defmodule JobHuntWeb.JobLive.Resume do
         Enum.any?(current_data["skills"], &(&1["id"] == item_id_str)) -> "skills"
         true -> nil
       end
-
-      IO.puts("Found section: #{inspect(section)}")
 
       # If we found a section, update it
       updated_data = if section do
@@ -213,8 +220,6 @@ defmodule JobHuntWeb.JobLive.Resume do
           true -> nil
         end
 
-        IO.puts("New section: #{inspect(new_section)}")
-
         if new_section do
           current_items = current_data[new_section]
           updated_items = [Map.put(form_data, "id", item_id_str) | current_items]
@@ -224,19 +229,17 @@ defmodule JobHuntWeb.JobLive.Resume do
         end
       end
 
-      IO.inspect(updated_data, label: "Updated data")
-
       socket =
         socket
         |> assign(:selected_resume, updated_data)
         |> assign(:creating_resume, true)
       {:noreply, socket}
     else
-      # In editing mode, update the database
+      # In editing mode, update the socket state
       current_resume = socket.assigns.selected_resume
       if current_resume do
         # Find which section contains this ID
-        section = cond do
+        existing_section = cond do
           Enum.any?(current_resume["experience"], &(&1["id"] == item_id_str)) -> "experience"
           Enum.any?(current_resume["education"], &(&1["id"] == item_id_str)) -> "education"
           Enum.any?(current_resume["projects"], &(&1["id"] == item_id_str)) -> "projects"
@@ -244,55 +247,104 @@ defmodule JobHuntWeb.JobLive.Resume do
           true -> nil
         end
 
-        if section do
-          current_items = current_resume[section]
-          updated_items = Enum.map(current_items, fn item ->
-            if item["id"] == item_id_str do
-              Map.put(form_data, "id", item_id_str)
-            else
-              item
+        updated_data_for_socket =
+          if existing_section do
+            # Update existing item in the section
+            current_items = current_resume[existing_section]
+            updated_items = Enum.map(current_items, fn item ->
+              if item["id"] == item_id_str do
+                # form_data already includes the "id" from the client
+                form_data
+              else
+                item
+              end
+            end)
+            Map.put(current_resume, existing_section, updated_items)
+          else
+            # New item: ID not found, determine section and add
+            # This handles items added via "Add Experience/Education/etc." in ResumeDetail.svelte while editing
+            new_item_section = cond do
+              # Heuristic to determine section based on typical fields
+              Map.has_key?(form_data, "company") || Map.has_key?(form_data, "positions") -> "experience"
+              Map.has_key?(form_data, "institution") || Map.has_key?(form_data, "courses") -> "education"
+              Map.has_key?(form_data, "name") && Map.has_key?(form_data, "description") -> "projects" # "name" is common, "description" helps disambiguate
+              Map.has_key?(form_data, "category") -> "skills"
+              true -> nil # Could not determine section
             end
-          end)
-          updated_data = Map.put(current_resume, section, updated_items)
-          socket = assign(socket, :selected_resume, updated_data)
-        end
+
+            if new_item_section do
+              current_items = Map.get(current_resume, new_item_section, []) # Ensure list exists, default to empty
+              # form_data from client already contains the temporary "id"
+              # Prepend new item to the list for that section
+              updated_items = [form_data | current_items]
+              Map.put(current_resume, new_item_section, updated_items)
+            else
+              # Could not determine section for the new item, log or handle as error?
+              # For now, return current_resume unchanged to avoid crashing.
+              IO.inspect(form_data, label: "Could not determine section for new item in form_updated (edit mode)")
+              current_resume
+            end
+          end
+        socket = assign(socket, :selected_resume, updated_data_for_socket)
         {:noreply, socket}
       else
+        # No current_resume selected, though this path implies editing an existing one.
         {:noreply, socket}
       end
     end
   end
 
   @impl true
+  def handle_event("save_experience_item", %{"id" => item_id}, socket) do
+    item_id_str = to_string(item_id)
+    current_resume = socket.assigns.selected_resume
+
+    if current_resume do
+      # Find the experience item in the current state
+      experience_item = Enum.find(current_resume["experience"], &(&1["id"] == item_id_str))
+
+      if experience_item do
+        # Update the database
+        resume = Context.get_resume!(socket.assigns.selected_resume_id)
+        case Context.update_resume(resume, current_resume) do
+          {:ok, updated_resume} ->
+            encoded_resume = encode_resume(updated_resume)
+            send(self(), :load_resumes)
+            socket = assign(socket, :selected_resume, encoded_resume)
+            {:reply, %{success: true, message: "Experience item saved successfully.", resume: encoded_resume}, socket}
+          {:error, changeset} ->
+            IO.inspect(changeset, label: "Error saving experience item")
+            {:reply, %{success: false, message: "Error saving experience item."}, socket}
+        end
+      else
+        {:reply, %{success: false, message: "Experience item not found."}, socket}
+      end
+    else
+      {:reply, %{success: false, message: "No resume selected."}, socket}
+    end
+  end
+
+  @impl true
   def handle_event("remove_experience_item", %{"id" => item_id_to_remove}, socket) do
     item_id_str = to_string(item_id_to_remove)
-    IO.puts("Received remove_experience_item event for ID: #{item_id_str}")
-    IO.puts("Current socket state - creating_resume: #{socket.assigns.creating_resume}")
-    IO.inspect(socket.assigns.selected_resume, label: "Current selected_resume")
 
     if socket.assigns.creating_resume do
       # In creating mode, just update the socket state
       current_data = socket.assigns.selected_resume || %{"experience" => []}
-      IO.inspect(current_data["experience"], label: "Current experience list")
 
       # Match either the string ID or the struct's id field
       updated_experience = Enum.reject(current_data["experience"], fn item ->
         case item do
           %{"id" => id} when is_binary(id) ->
-            IO.puts("Comparing item ID #{id} with #{item_id_str}")
             id == item_id_str
           %{id: id} when is_binary(id) ->
-            IO.puts("Comparing item ID #{id} with #{item_id_str}")
             id == item_id_str
           _ ->
-            IO.puts("Item has no ID field")
             false
         end
       end)
-      IO.inspect(updated_experience, label: "Updated experience list")
 
       updated_socket_data = %{current_data | "experience" => updated_experience}
-      IO.inspect(updated_socket_data, label: "Updated socket data")
 
       socket =
         socket
@@ -438,18 +490,28 @@ defmodule JobHuntWeb.JobLive.Resume do
   defp encode_resume(%JobHunt.Resume{} = resume) do
     %{
       "id" => resume.id,
+      "name" => resume.name,
       "experience" => Enum.map(resume.experience, &encode_experience/1),
       "education" => Enum.map(resume.education, &encode_education/1),
       "projects" => Enum.map(resume.projects, &encode_project/1),
       "skills" => Enum.map(resume.skills, &encode_skill/1),
-      "created_at" => resume.inserted_at,
-      "updated_at" => resume.updated_at
+      "created_at" => format_datetime(resume.inserted_at),
+      "updated_at" => format_datetime(resume.updated_at)
     }
   end
+
+  defp format_datetime(nil), do: nil
+
+  defp format_datetime(%NaiveDateTime{} = ndt) do
+    DateTime.from_naive!(ndt, "Etc/UTC") |> DateTime.to_iso8601()
+  end
+
+  defp format_datetime(%DateTime{} = dt), do: DateTime.to_iso8601(dt)
 
   defp encode_experience(nil), do: nil
   defp encode_experience(%JobHunt.Resume.Experience{} = exp) do
      %{
+      "id" => exp.id,
       "company" => exp.company,
       "positions" => exp.positions,
       "start_date" => exp.start_date,

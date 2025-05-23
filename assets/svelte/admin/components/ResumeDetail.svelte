@@ -20,47 +20,76 @@
 
     // Form data structure matching the Ecto schema
     let formData = {
+        name: '',
         experience: [],
         education: [],
         projects: [],
         skills: []
     };
 
+    let previousSelectedResumeId = null;
+
+    // Helper function to sort experience items by start_date (most recent first)
+    function sortExperienceByDate(experienceArray) {
+        if (!Array.isArray(experienceArray)) return [];
+        return [...experienceArray].sort((a, b) => {
+            const dateAValid = a.start_date && !isNaN(new Date(a.start_date).getTime());
+            const dateBValid = b.start_date && !isNaN(new Date(b.start_date).getTime());
+
+            if (dateAValid && !dateBValid) return -1; // a comes before b (more recent)
+            if (!dateAValid && dateBValid) return 1;  // b comes before a
+            if (!dateAValid && !dateBValid) return 0; // Keep original order for two invalid/missing dates
+
+            // Both dates are valid, compare them
+            const dateA = new Date(a.start_date);
+            const dateB = new Date(b.start_date);
+            return dateB.getTime() - dateA.getTime(); // Descending order
+        });
+    }
+
     // Sync form data when selectedResume or creatingResume changes
     $: {
+        const currentResumeId = selectedResume ? selectedResume.id : null;
+
         if (creatingResume) {
-            editMode = true;
-            // If selectedResume is provided by the server (even during creation), its data should populate formData.
-            // Otherwise (e.g., initial click on "Create New"), initialize formData for a truly new resume.
+            editMode = true; // When creating, always start in edit mode.
             if (selectedResume && typeof selectedResume === 'object' && Object.keys(selectedResume).length > 0) {
-                formData.experience = selectedResume.experience || [];
+                formData.name = selectedResume.name || '';
+                formData.experience = selectedResume.experience ? sortExperienceByDate(selectedResume.experience) : [];
                 formData.education = selectedResume.education || [];
                 formData.projects = selectedResume.projects || [];
                 formData.skills = selectedResume.skills || [];
-            } else if (!selectedResume) { // Only reset if selectedResume is explicitly null/undefined
+            } else if (!selectedResume) { 
                 formData = {
+                    name: '',
                     experience: [],
                     education: [],
                     projects: [],
                     skills: []
                 };
             }
-            // DO NOT set selectedResume = null here; let it be driven by the server.
-        } else if (selectedResume) {
-            editMode = false; // Or based on bind:checked
-            formData.experience = selectedResume.experience || [];
-            formData.education = selectedResume.education || [];
-            formData.projects = selectedResume.projects || [];
-            formData.skills = selectedResume.skills || [];
-        } else { // No resume selected, not creating
-            editMode = false;
-            formData = {
-                experience: [],
-                education: [],
-                projects: [],
-                skills: []
-            };
+        } else { // Not creatingResume
+            if (selectedResume) {
+                if (currentResumeId !== previousSelectedResumeId) {
+                    editMode = false;
+                }
+                formData.name = selectedResume.name || '';
+                formData.experience = selectedResume.experience ? sortExperienceByDate(selectedResume.experience) : [];
+                formData.education = selectedResume.education || [];
+                formData.projects = selectedResume.projects || [];
+                formData.skills = selectedResume.skills || [];
+            } else { // No resume selected, not creating
+                editMode = false;
+                formData = {
+                    name: '',
+                    experience: [],
+                    education: [],
+                    projects: [],
+                    skills: []
+                };
+            }
         }
+        previousSelectedResumeId = currentResumeId;
     }
 
     // Handle saving the resume
@@ -68,10 +97,23 @@
         console.log("Saving resume:", formData);
         if (live) {
             const event = creatingResume ? "create_resume" : "update_resume";
-            const payload = creatingResume
-                ? formData
-                : { id: selectedResume.id, ...formData };
+            let payload;
+            
+            if (creatingResume) {
+                payload = formData;
+            } else {
+                // Always include all fields in the update
+                payload = {
+                    id: selectedResume.id,
+                    name: formData.name,
+                    experience: formData.experience,
+                    education: formData.education,
+                    projects: formData.projects,
+                    skills: formData.skills
+                };
+            }
 
+            console.log("Sending payload:", payload);
             live.pushEvent(event, payload, (reply) => {
                 if (reply && reply.success) {
                     console.log(`Resume ${creatingResume ? 'created' : 'updated'} successfully:`, reply);
@@ -94,6 +136,7 @@
             editMode = false;
         } else if (selectedResume) {
             formData = {
+                name: selectedResume.name || '',
                 experience: selectedResume.experience || [],
                 education: selectedResume.education || [],
                 projects: selectedResume.projects || [],
@@ -111,6 +154,9 @@
         };
         console.log("Adding new item to section:", section, "with ID:", newItem.id);
         formData[section] = [...formData[section], newItem];
+        if (section === 'experience') {
+            formData.experience = sortExperienceByDate(formData.experience);
+        }
         console.log("Updated formData for section:", section, formData[section]);
         // Push the initial form data to ensure it's in the state
         if (live) {
@@ -184,12 +230,35 @@
     $: if (live) {
         live.handleEvent("form_updated", ({ id, form }) => {
             console.log("Received form_updated event for ID:", id, "form:", form);
-            // ... rest of the handler
+            // Find which section contains this ID
+            const section = Object.keys(formData).find(key => 
+                Array.isArray(formData[key]) && 
+                formData[key].some(item => item.id === id)
+            );
+
+            if (section) {
+                // Update the item in the section
+                formData[section] = formData[section].map(item => 
+                    item.id === id ? { ...item, ...form } : item
+                );
+                if (section === 'experience') {
+                    formData.experience = sortExperienceByDate(formData.experience);
+                }
+                // Trigger reactivity
+                formData = { ...formData };
+            }
+        });
+
+        live.handleEvent("save_experience_item", ({ success, message }) => {
+            console.log("Save experience item result:", success, message);
+            if (success) {
+                // Reload the resume data
+                live.pushEvent("select_resume", { id: selectedResume.id });
+            }
         });
     }
 
     onMount(() => {
-        console.log("ResumeDetail mounted. Creating:", creatingResume, "Selected:", selectedResume);
         if (creatingResume) {
             editMode = true;
         }
@@ -204,9 +273,20 @@
     {:else}
         <!-- Header and Edit Toggle -->
         <div class="flex justify-between items-center pb-2 border-b">
-            <h2 class="text-xl font-semibold">
-                {creatingResume ? 'Create New Resume' : 'Resume Details'}
-            </h2>
+            <div class="flex-grow">
+                {#if editMode}
+                    <input
+                        type="text"
+                        bind:value={formData.name}
+                        placeholder="Enter resume name"
+                        class="text-xl font-semibold w-full px-2 py-1 border border-gray-400 rounded focus:outline-none focus:ring focus:ring-blue-500"
+                    />
+                {:else}
+                    <h2 class="text-xl font-semibold">
+                        {formData.name || (creatingResume ? 'Create New Resume' : 'Resume Details')}
+                    </h2>
+                {/if}
+            </div>
 
             {#if !creatingResume && selectedResume}
                 <div class="flex items-center space-x-4">
@@ -226,7 +306,7 @@
         <!-- Content -->
         <div class="flex-grow space-y-4 overflow-y-auto">
             <!-- Navigation Tabs -->
-            <div class="border-b">
+            <div>
                 <nav class="flex space-x-4">
                     {#each ['experience', 'education', 'projects', 'skills'] as section}
                         <button
@@ -283,11 +363,43 @@
                                 {:else}
                                     <div class="space-y-2">
                                         <div class="flex justify-between">
-                                            <h3 class="text-lg font-medium">{experienceItem.title}</h3>
-                                            <span class="text-gray-500">{experienceItem.start_date} - {experienceItem.end_date}</span>
+                                            <h3 class="text-lg font-medium">{experienceItem.company}</h3>
+                                            <span class="text-gray-500">
+                                                {experienceItem.start_date}
+                                                {' - '}
+                                                {experienceItem.end_date ? experienceItem.end_date : 'Current'}
+                                            </span>
                                         </div>
-                                        <div class="text-gray-600">{experienceItem.company} • {experienceItem.location}</div>
-                                        <p class="text-gray-700 whitespace-pre-wrap">{experienceItem.description}</p>
+                                        <div class="text-gray-600">
+                                            <strong>Positions:</strong> {experienceItem.positions && experienceItem.positions.length > 0 ? experienceItem.positions.join(', ') : '-'}
+                                        </div>
+                                        <div class="text-gray-600">
+                                            <strong>Technologies:</strong> {experienceItem.technologies && experienceItem.technologies.length > 0 ? experienceItem.technologies.join(', ') : '-'}
+                                        </div>
+                                        <div class="text-gray-600">
+                                            <strong>Relevant Experience:</strong>
+                                            {#if experienceItem.relevant_experience && experienceItem.relevant_experience.length > 0}
+                                                <ul class="list-disc ml-5">
+                                                    {#each experienceItem.relevant_experience as relExp}
+                                                        <li>{relExp}</li>
+                                                    {/each}
+                                                </ul>
+                                            {:else}
+                                                -
+                                            {/if}
+                                        </div>
+                                        <div class="text-gray-600">
+                                            <strong>Highlights:</strong>
+                                            {#if experienceItem.highlights && experienceItem.highlights.length > 0}
+                                                <ul class="list-disc ml-5">
+                                                    {#each experienceItem.highlights as highlight}
+                                                        <li>{highlight}</li>
+                                                    {/each}
+                                                </ul>
+                                            {:else}
+                                                -
+                                            {/if}
+                                        </div>
                                     </div>
                                 {/if}
                             </div>
@@ -298,7 +410,7 @@
                 {:else if activeSection === 'education'}
                     <div class="space-y-4">
                         {#each formData.education as educationItem, index (educationItem.id)}
-                            <div class="p-4 border rounded-lg">
+                            <div class="p-4 rounded-lg">
                                 {#if editMode}
                                     <ResumeEducation
                                         education={educationItem}
@@ -349,7 +461,7 @@
                 {:else if activeSection === 'projects'}
                     <div class="space-y-4">
                         {#each formData.projects as project, index (project.id)}
-                            <div class="p-4 border rounded-lg">
+                            <div class="p-4 rounded-lg">
                                 {#if editMode}
                                     <ResumeProjects
                                         project={project}
@@ -401,7 +513,7 @@
                 {:else if activeSection === 'skills'}
                     <div class="space-y-4">
                         {#each formData.skills as skill, index (skill.id)}
-                            <div class="p-4 border rounded-lg">
+                            <div class="p-4 rounded-lg">
                                 {#if editMode}
                                     <ResumeSkills
                                         skill={skill}

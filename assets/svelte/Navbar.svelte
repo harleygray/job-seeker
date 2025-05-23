@@ -24,17 +24,6 @@
 		return currentPath === path;
 	}
 
-	// Log when currentPath changes
-	$: {
-		if (currentPath) {
-			console.log('currentPath changed:', currentPath);
-			console.log('currentPath type:', typeof currentPath);
-			console.log('currentPath length:', currentPath.length);
-			console.log('currentPath chars:', Array.from(currentPath).map(c => c.charCodeAt(0)));
-		} else {
-			console.log('currentPath is undefined');
-		}
-	}
 </script>
 
 <NavigationMenu.Root

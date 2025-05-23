@@ -130,23 +130,33 @@
         live.pushEventTo(`#${parent}`, event, finalPayload);
     }
 
+    // Handle form field updates
+    function updateField(fieldName: string, value: any) {
+        form[fieldName] = value;
+        form = { ...form }; // Trigger reactivity
+        pushEvent("form_updated", { form: $state.snapshot(form) });
+    }
+
     // Handle array field updates
     function addArrayItem(fieldName: string) {
         if (!form[fieldName]) {
             form[fieldName] = [];
         }
         form[fieldName] = [...form[fieldName], ""];
+        form = { ...form }; // Trigger reactivity
         pushEvent("form_updated", { form: $state.snapshot(form) });
     }
 
     function removeArrayItem(fieldName: string, index: number) {
         form[fieldName] = form[fieldName].filter((_, i) => i !== index);
+        form = { ...form }; // Trigger reactivity
         pushEvent("form_updated", { form: $state.snapshot(form) });
     }
 
     function updateArrayItem(fieldName: string, index: number, value: string) {
         form[fieldName][index] = value;
         form[fieldName] = [...form[fieldName]]; // Trigger reactivity
+        form = { ...form }; // Trigger reactivity
         pushEvent("form_updated", { form: $state.snapshot(form) });
     }
 
@@ -167,27 +177,63 @@
             console.log("No live connection available");
         }
     }
+
+    // Add save function
+    function saveExperience() {
+        if (live) {
+            live.pushEventTo(`#${parent}`, "save_experience_item", { id: form.id }, (reply) => {
+                if (reply && reply.success) {
+                    console.log("Experience item saved successfully:", reply);
+                    // Update the local form state with the saved data
+                    if (reply.resume) {
+                        const savedItem = reply.resume.experience.find(item => item.id === form.id);
+                        if (savedItem) {
+                            form = { ...savedItem };
+                        }
+                    }
+                } else {
+                    console.error("Error saving experience item:", reply);
+                }
+            });
+        }
+    }
+
+    // Add a helper function to generate unique IDs
+    function getUniqueId(fieldName: string) {
+        return `${fieldName}-${form.id}`;
+    }
 </script>
 
 <div class="space-y-4">
     <!-- Company field -->
     <div class="space-y-2">
         <div class="flex justify-between items-center mb-2">
-            <Label for="company">Company</Label>
-            <Button
-                type="button"
-                variant="destructive"
-                size="sm"
-                onclick={removeExperience}
-            >
-                <Trash class="h-4 w-4 mr-2" />
-                Remove Experience
-            </Button>
+            <Label for={getUniqueId("company")}>Company</Label>
+            <div class="flex gap-2">
+                <Button
+                    type="button"
+                    variant="default"
+                    size="sm"
+                    onclick={saveExperience}
+                >
+                    Save
+                </Button>
+                <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    onclick={removeExperience}
+                >
+                    <Trash class="h-4 w-4 mr-2" />
+                    Remove Experience
+                </Button>
+            </div>
         </div>
         <Input
             type="text"
-            id="company"
-            bind:value={form.company}
+            id={getUniqueId("company")}
+            value={form.company}
+            on:input={(e) => updateField("company", e.currentTarget.value)}
             placeholder="Enter company name"
         />
         {#if fieldErrors.has("company")}
@@ -200,13 +246,13 @@
     <!-- Positions and Technologies on same row -->
     <div class="flex gap-4">
         <div class="flex-1 space-y-2">
-            <Label for="positions">Positions</Label>
+            <Label for={getUniqueId("positions")}>Positions</Label>
             <div class="space-y-2">
                 {#each form.positions as item, index}
                     <div class="flex gap-2">
                         <Input
                             type="text"
-                            id={`positions-${index}`}
+                            id={`${getUniqueId("positions")}-${index}`}
                             value={item}
                             on:input={(e) => updateArrayItem("positions", index, e.currentTarget.value)}
                             placeholder="Enter position title"
@@ -241,13 +287,13 @@
         </div>
 
         <div class="flex-1 space-y-2">
-            <Label for="technologies">Technologies</Label>
+            <Label for={getUniqueId("technologies")}>Technologies</Label>
             <div class="space-y-2">
                 {#each form.technologies as item, index}
                     <div class="flex gap-2">
                         <Input
                             type="text"
-                            id={`technologies-${index}`}
+                            id={`${getUniqueId("technologies")}-${index}`}
                             value={item}
                             on:input={(e) => updateArrayItem("technologies", index, e.currentTarget.value)}
                             placeholder="Enter technology"
@@ -285,17 +331,18 @@
     <!-- Start and End Date on same row -->
     <div class="flex gap-4">
         <div class="flex-1">
-            <Label for="start_date">Start Date</Label>
+            <Label for={getUniqueId("start_date")}>Start Date</Label>
             <Input
                 type="date"
-                id="start_date"
-                bind:value={form.start_date}
+                id={getUniqueId("start_date")}
+                value={form.start_date}
+                on:input={(e) => updateField("start_date", e.currentTarget.value)}
                 placeholder="YYYY-MM-DD"
             />
         </div>
         <div class="flex-1">
             <div class="flex items-center gap-2 mb-1.5">
-                <Label for="end_date">End Date</Label>
+                <Label for={getUniqueId("end_date")}>End Date</Label>
                 <Tooltip.Provider>
                     <Tooltip.Root delayDuration={50}>
                         <Tooltip.Trigger
@@ -313,8 +360,9 @@
             </div>
             <Input
                 type="date"
-                id="end_date"
-                bind:value={form.end_date}
+                id={getUniqueId("end_date")}
+                value={form.end_date}
+                on:input={(e) => updateField("end_date", e.currentTarget.value)}
                 placeholder="YYYY-MM-DD"
             />
         </div>
@@ -337,13 +385,13 @@
     <!-- Highlights and Relevant Experience on same row -->
     <div class="flex gap-4">
         <div class="flex-1 space-y-2">
-            <Label for="highlights">Key Highlights</Label>
+            <Label for={getUniqueId("highlights")}>Key Highlights</Label>
             <div class="space-y-2">
                 {#each form.highlights as item, index}
                     <div class="flex gap-2">
                         <Input
                             type="text"
-                            id={`highlights-${index}`}
+                            id={`${getUniqueId("highlights")}-${index}`}
                             value={item}
                             on:input={(e) => updateArrayItem("highlights", index, e.currentTarget.value)}
                             placeholder="Enter achievement or highlight"
@@ -378,13 +426,13 @@
         </div>
 
         <div class="flex-1 space-y-2">
-            <Label for="relevant_experience">Relevant Experience</Label>
+            <Label for={getUniqueId("relevant_experience")}>Relevant Experience</Label>
             <div class="space-y-2">
                 {#each form.relevant_experience as item, index}
                     <div class="flex gap-2">
                         <Input
                             type="text"
-                            id={`relevant_experience-${index}`}
+                            id={`${getUniqueId("relevant_experience")}-${index}`}
                             value={item}
                             on:input={(e) => updateArrayItem("relevant_experience", index, e.currentTarget.value)}
                             placeholder="Enter relevant experience"
