@@ -9,8 +9,7 @@ defmodule JobHunt.GroqClient do
            | :failed_generation_parse
            | :http_error
            | :unexpected_error_format
-           | :unexpected_response
-           | JSON.DecodeError.t()}
+           | :unexpected_response}
           | {:ok, any()}
   def process_job(title, employer, description) do
     prompt = """
