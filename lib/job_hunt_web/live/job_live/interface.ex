@@ -268,11 +268,9 @@ defmodule JobHuntWeb.JobLive.Interface do
             cover_letter_path: cover_relative_path
           }, socket}
 
-        {{:error, cv_reason}, _} ->
-          {:reply, %{success: false, error: "Failed to generate CV PDF: #{inspect(cv_reason)}"}, socket}
 
-        {_, {:error, cover_reason}} ->
-          {:reply, %{success: false, error: "Failed to generate Cover Letter PDF: #{inspect(cover_reason)}"}, socket}
+        other ->
+          {:reply, %{success: false, error: "Unexpected PDF generation result: #{inspect(other)}"}, socket}
       end
     rescue
       error ->
