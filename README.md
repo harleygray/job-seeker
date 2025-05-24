@@ -1,13 +1,28 @@
 # 🚀 Job Seeker 🎯
 
-My personal toolkit for efficient job applications. This is a full-stack application built on Elixir which allows me to quickly apply to jobs and showcase my best skills.
+My personal toolkit for efficient job applications. This full-stack application combines Elixir/Phoenix LiveView with Svelte components and AI-powered content generation to streamline the entire job application process.
 
 ## ✨ How it works
 
-*   📄 **crafts applications:** generate personalised CVs ([`cv_generator.ex`](lib/job_hunt/cv_generator.ex)) and cover letters ([`cover_letter_generator.ex`](lib/job_hunt/cover_letter_generator.ex)) that highlight my experience relevant to the position
-*   🤖 **powered by groq:** uses the groq ai api for smart text generation ([`groq_client.ex`](lib/job_hunt/groq_client.ex)) using open source large language models (typically Meta's LLaMA series)
-*   📊 **keeps me organized:** tracks my job applications in one place ([`job.ex`](lib/job_hunt/job.ex))
-*   💅 **looks professional:** creates polished pdf documents from HTML
+### 🏗️ **Architecture**
+*   **Backend:** Elixir/Phoenix with LiveView for real-time updates
+*   **Frontend:** Svelte components embedded in LiveView for reactive UI
+*   **AI Integration:** Groq API with structured JSON output for intelligent content generation
+*   **PDF Generation:** ChromicPDF for professional document creation
+
+### 🎯 **Core Features**
+*   📋 **Job Management:** Track applications with intelligent scoring across multiple role types (Data Analyst, Software Engineer, AI Engineer, etc.)
+*   🤖 **AI-Powered Content:** Generate personalized CVs and cover letters using Groq's LLaMA models with structured output
+*   📄 **Document Preview:** Live HTML preview with inline editing capabilities before PDF generation
+*   💾 **Smart Storage:** Organize generated PDFs by company in `static/generated_pdfs/`
+*   📊 **Application Tracking:** Monitor application status (Active/Archived) with detailed job information
+
+### 🔄 **Workflow**
+1. Add job postings through the Svelte-powered interface
+2. AI analyzes job descriptions and generates role-specific scores
+3. Generate tailored CV (2 pages) and cover letter using Groq API
+4. Preview and edit documents in real-time with Svelte components
+5. Export professional PDFs with zero margins, organized by company
 
 ## 🛠️ Setting it up
 
@@ -19,16 +34,18 @@ if you want to use this tool too:
    
    (note that asdf has a new version so some commands are deprecated but this will get you most of the way)
 
-2. **grab the dependencies:**
+2. **Grab the dependencies:**
    ```bash
    mix setup
    ```
 
-3. **fire it up:**
+3. **Set environment variables and personalise:**
+   Create a .env file in the project root with `GROQ_API_KEY`
+
+4. **Fire it up:**
    ```bash
    mix phx.server
    ```
 
-## 📂 how it's organized
 
 
