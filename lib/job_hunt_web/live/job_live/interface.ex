@@ -23,32 +23,37 @@ defmodule JobHuntWeb.JobLive.Interface do
   @impl true
   def render(assigns) do
     ~H"""
-    <div id="interface-container" class="h-screen flex flex-col bg-gray-50">
+    <div id="interface-container" class="h-screen flex flex-col bg-gray-50" style="min-width: 100vw;">
       <div class="z-50">
         <.safe_svelte name="Navbar" socket={@socket} currentPath="/" />
       </div>
 
-      <div class="h-full flex overflow-hidden">
-        <!-- Job List (1/4 width) -->
-        <.safe_svelte
-            name="admin/components/JobList"
-            props={
-              %{
-                jobs: @jobs,
-                selectedJobId: @selected_job_id
+      <div class="h-full relative overflow-hidden" style="min-width: 100%;">
+        <!-- Job List (1/4 width) - Fixed position -->
+        <div class="absolute left-0 top-0 bottom-0" style="width: 25%; min-width: 25%; max-width: 25%;">
+          <.safe_svelte
+              name="admin/components/JobList"
+              props={
+                %{
+                  jobs: @jobs,
+                  selectedJobId: @selected_job_id
+                }
               }
-            }
-            socket={@socket}
-            class="w-1/4"
-          />
+              socket={@socket}
+              class="w-full h-full"
+            />
+        </div>
 
+        <!-- Job Detail (3/4 width) - Fixed position -->
+        <div class="absolute right-0 top-0 bottom-0" style="width: 75%; min-width: 75%; max-width: 75%;">
           <.safe_svelte
             name="admin/components/JobDetail"
             props={%{selectedJob: @selected_job, creatingJob: @creating_job}}
             socket={@socket}
-            class="w-3/4"
+            class="w-full h-full"
           />
         </div>
+      </div>
 
       </div>
 
@@ -163,6 +168,39 @@ defmodule JobHuntWeb.JobLive.Interface do
       other ->
         IO.inspect(other, label: "Unexpected result from Context.update_job")
         {:reply, %{success: false, message: "Unexpected error updating job."}, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("generate_cv", %{"jobId" => job_id}, socket) do
+    job = Context.get_job!(job_id)
+    {html_content1, html_content2} = JobHunt.CVGenerator.generate_html()
+    {cover_letter} = JobHunt.CoverLetterGenerator.generate_html(
+      job.description,
+      "Not specified",  # We can add a field for addressee later if needed
+      job.employer
+    )
+
+    {:reply, %{
+      success: true,
+      cv_page1: html_content1,
+      cv_page2: html_content2,
+      cover_letter: cover_letter
+    }, socket}
+  end
+
+  @impl true
+  def handle_event("generate_pdf", %{
+    "cv_content1" => content1,
+    "cv_content2" => content2,
+    "cover_letter_content" => cover_letter,
+    "companyName" => company_name
+  }, socket) do
+    case JobHunt.CVGenerator.generate_pdf(content1, content2, company_name) do
+      {:ok, pdf_path} ->
+        {:reply, %{success: true, pdf_path: pdf_path}, socket}
+      {:error, reason} ->
+        {:reply, %{success: false, error: reason}, socket}
     end
   end
 

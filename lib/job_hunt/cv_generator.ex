@@ -1,5 +1,6 @@
 defmodule JobHunt.CVGenerator do
   require EEx
+  alias JobHunt.Resume.Context
 
   left_column_template_path =
     Path.join(
@@ -11,7 +12,6 @@ defmodule JobHunt.CVGenerator do
 
   def generate_html() do
     css_styles_path = Path.join(:code.priv_dir(:job_hunt), "static/cv_styles.html")
-
     css_styles = File.read!(css_styles_path)
 
     # Read the SVG files
@@ -23,15 +23,53 @@ defmodule JobHunt.CVGenerator do
     image_data = File.read!(image_path) |> Base.encode64()
     profile_image = "<img src=\"data:image/jpeg;base64,#{image_data}\" class=\"profile-image\">"
 
-    # Extract relevant resume information from the YAML file
-    resume_content = YamlElixir.read_from_file!("#{File.cwd!()}/priv/static/resume.yaml")
-    formatted_resume = ResumeFormatter.format_resume(resume_content)
+    # Get the most recent resume from the database
+    resume = Context.get_most_recent_resume()
 
-    # Generate HTML for introduction and projects sections from resume YAML
+    if is_nil(resume) do
+      raise "No resume found in the database"
+    end
+
+    # Format the resume data
+    formatted_resume = %{
+      projects: %{
+        heading: "Projects",
+        items: (resume.projects || []) |> Enum.map(fn project ->
+          %{
+            sub_heading: project.name,
+            description: project.description,
+            highlights: project.highlights || [],
+            technologies: project.technologies || []
+          }
+        end)
+      },
+      experience: %{
+        heading: "Experience",
+        items: (resume.experience || []) |> Enum.map(fn exp ->
+          %{
+            sub_heading: exp.company,
+            date: "#{exp.start_date} - #{exp.end_date}",
+            highlights: exp.highlights || [],
+            technologies: exp.technologies || []
+          }
+        end)
+      },
+      education: %{
+        heading: "Education",
+        items: (resume.education || []) |> Enum.map(fn edu ->
+          %{
+            sub_heading: edu.institution,
+            highlights: edu.highlights || []
+          }
+        end)
+      }
+    }
+
+    # Generate HTML for introduction and projects sections from resume
     formatted_resume_html_pg1 =
       [:projects]
       |> Enum.map(fn section_key ->
-        section = Map.get(formatted_resume, section_key)
+        section = Map.get(formatted_resume, section_key, %{heading: "", items: []})
 
         """
         <h2 class="heading-option">#{section.heading}</h2>
@@ -63,11 +101,11 @@ defmodule JobHunt.CVGenerator do
       end)
       |> Enum.join("\n")
 
-    # Generate HTML for experience and education sections from resume YAML
+    # Generate HTML for experience and education sections from resume
     formatted_resume_html_pg2 =
       [:experience, :education]
       |> Enum.map(fn section_key ->
-        section = Map.get(formatted_resume, section_key)
+        section = Map.get(formatted_resume, section_key, %{heading: "", items: []})
 
         """
         <h2 class="heading-option">#{section.heading}</h2>
@@ -118,9 +156,6 @@ defmodule JobHunt.CVGenerator do
       base_pdf_dir = "priv/static/generated_pdfs"
       output_dir = Path.join(base_pdf_dir, company_name)
       File.mkdir_p!(output_dir)
-
-      # Generate timestamp (testing)
-      # timestamp = DateTime.utc_now() |> Calendar.strftime("%d-%m-%H-%M-%S")
 
       # Define the output path
       final_output_path = Path.join(output_dir, "Harley Gray CV.pdf")

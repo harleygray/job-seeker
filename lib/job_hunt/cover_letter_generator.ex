@@ -1,6 +1,7 @@
 defmodule JobHunt.CoverLetterGenerator do
   require EEx
   alias JobHunt.GroqClient
+  alias JobHunt.Resume.Context
 
   left_column_template_path =
     Path.join(
@@ -11,11 +12,7 @@ defmodule JobHunt.CoverLetterGenerator do
   EEx.function_from_file(:def, :render_left_column, left_column_template_path, [:assigns])
 
   def generate_html(position_description, addressee, company_name) do
-    # For now, we'll use the content string arbitrarily
-    # In a real scenario, you'd use this to customize the HTML
-
     css_styles_path = Path.join(:code.priv_dir(:job_hunt), "static/cv_styles.html")
-
     css_styles = File.read!(css_styles_path)
 
     # Read the SVG files
@@ -27,26 +24,23 @@ defmodule JobHunt.CoverLetterGenerator do
     image_data = File.read!(image_path) |> Base.encode64()
     profile_image = "<img src=\"data:image/jpeg;base64,#{image_data}\" class=\"profile-image\">"
 
-    # Extract relevant resume information from the YAML file
-    resume_content = YamlElixir.read_from_file!("#{File.cwd!()}/priv/static/resume.yaml")
-    formatted_cv = CoverLetterFormatter.format_resume(resume_content)
+    # Get the most recent resume from the database
+    resume = Context.get_most_recent_resume()
 
-    # Generate HTML for experience section from resume YAML
+    if is_nil(resume) do
+      raise "No resume found in the database"
+    end
+
+    # Format the resume data for cover letter
     formatted_experience_text =
-      [:experience]
-      |> Enum.map(fn section_key ->
-        section = Map.get(formatted_cv, section_key)
-
+      (resume.experience || [])
+      |> Enum.map(fn exp ->
         """
-        #{section.heading}
+        #{exp.company}
 
-        #{Enum.map(section.items, fn item -> """
-          #{item.sub_heading}
+        Relevant Experience: #{Enum.join(exp.highlights || [], "\n")}
 
-          Relevant Experience: #{item.relevant_experience}
-
-          #{if Map.has_key?(item, :technologies), do: "Technologies: #{item.technologies}", else: ""}
-          """ end) |> Enum.join("\n\n")}
+        #{if exp.technologies && length(exp.technologies) > 0, do: "Technologies: #{Enum.join(exp.technologies, ", ")}", else: ""}
         """
       end)
       |> Enum.join("\n\n")
@@ -102,9 +96,6 @@ defmodule JobHunt.CoverLetterGenerator do
       base_pdf_dir = "priv/static/generated_pdfs"
       output_dir = Path.join(base_pdf_dir, company_name)
       File.mkdir_p!(output_dir)
-
-      # Generate timestamp (testing)
-      # timestamp = DateTime.utc_now() |> Calendar.strftime("%d-%m-%H-%M-%S")
 
       # Define the output path
       final_output_path = Path.join(output_dir, "Harley Gray Cover Letter.pdf")

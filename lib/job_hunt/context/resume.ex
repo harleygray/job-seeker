@@ -22,6 +22,27 @@ defmodule JobHunt.Resume.Context do
   end
 
   @doc """
+  Gets the most recently updated resume.
+
+  Returns nil if no resume exists.
+
+  ## Examples
+
+      iex> get_most_recent_resume()
+      %Resume{}
+
+      iex> get_most_recent_resume()
+      nil
+
+  """
+  def get_most_recent_resume do
+    Resume
+    |> order_by([r], desc: r.updated_at)
+    |> limit(1)
+    |> Repo.one()
+  end
+
+  @doc """
   Gets a single resume.
 
   Raises `Ecto.NoResultsError` if the Resume does not exist.

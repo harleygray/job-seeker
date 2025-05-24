@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { onMount } from "svelte";
     import Funnel from "phosphor-svelte/lib/Funnel";
     import MagnifyingGlass from "phosphor-svelte/lib/MagnifyingGlass";
     import Plus from "phosphor-svelte/lib/Plus";
@@ -18,6 +19,57 @@
     let filterStatus = $state('all');
     let showFilters = $state(false);
     let listElement;
+    let containerElement; // Add reference to container
+    let containerWidth = $state(null);
+    let containerHeight = $state(null);
+    let debugInfo = $state('Initial');
+
+    // Add ResizeObserver to track JobList container changes
+    let resizeObserver;
+
+    // Add debugging for button styles
+    let firstButton;
+    let buttonDebugInfo = $state('No buttons');
+
+    onMount(() => {
+        if (containerElement) {
+            // Log initial dimensions
+            const rect = containerElement.getBoundingClientRect();
+            containerWidth = rect.width;
+            containerHeight = rect.height;
+            console.log('JobList Initial:', { width: rect.width, height: rect.height });
+            
+            // Set up ResizeObserver
+            resizeObserver = new ResizeObserver((entries) => {
+                for (const entry of entries) {
+                    const newWidth = entry.contentRect.width;
+                    const newHeight = entry.contentRect.height;
+                    
+                    if (newWidth !== containerWidth || newHeight !== containerHeight) {
+                        console.log('JobList Container Changed:', {
+                            oldWidth: containerWidth,
+                            newWidth: newWidth,
+                            oldHeight: containerHeight,
+                            newHeight: newHeight,
+                            difference: newWidth - containerWidth
+                        });
+                        
+                        containerWidth = newWidth;
+                        containerHeight = newHeight;
+                        debugInfo = `W:${Math.round(newWidth)} H:${Math.round(newHeight)}`;
+                    }
+                }
+            });
+            
+            resizeObserver.observe(containerElement);
+        }
+        
+        return () => {
+            if (resizeObserver) {
+                resizeObserver.disconnect();
+            }
+        };
+    });
 
     // Status options for the select
     const statusOptions = [
@@ -92,11 +144,52 @@
                 return 'default'; 
         }
     }
+
+    function debugButtonStyles() {
+        if (firstButton) {
+            const rect = firstButton.getBoundingClientRect();
+            const computedStyle = window.getComputedStyle(firstButton);
+            
+            const info = {
+                width: rect.width,
+                height: rect.height,
+                paddingLeft: computedStyle.paddingLeft,
+                paddingRight: computedStyle.paddingRight,
+                marginLeft: computedStyle.marginLeft,
+                marginRight: computedStyle.marginRight,
+                borderLeft: computedStyle.borderLeftWidth,
+                borderRight: computedStyle.borderRightWidth,
+                fontSize: computedStyle.fontSize,
+                fontFamily: computedStyle.fontFamily
+            };
+            
+            console.log('Button Styles:', info);
+            buttonDebugInfo = `W:${Math.round(rect.width)} PL:${computedStyle.paddingLeft} PR:${computedStyle.paddingRight}`;
+            
+            return info;
+        }
+        return null;
+    }
+
+    // Track button changes
+    $effect(() => {
+        if (filteredJobs.length > 0) {
+            // Delay to ensure button is rendered
+            setTimeout(() => {
+                debugButtonStyles();
+            }, 100);
+        }
+    });
 </script>
   
-<div class="job-container">
+    <div class="job-container h-full flex flex-col" bind:this={containerElement} data-debug="joblist">
+    <!-- Debug info -->
+    <div class="text-xs text-gray-500 px-2 py-1 bg-yellow-100">
+        JobList: {debugInfo} | Button: {buttonDebugInfo}
+    </div>
+    
     <!-- Search and filter bar -->
-    <div class="job-search">
+    <div class="job-search flex-shrink-0">
         <div class="flex items-center w-full">
             <div class="flex-1 mr-2">
                 <JobSearch
@@ -154,7 +247,7 @@
         {/if}
     </div>
     
-    <div class="job-list flex-1 overflow-y-auto px-4 pt-2 pb-0" bind:this={listElement}>
+    <div class="job-list flex-grow overflow-y-auto min-h-0 px-4 pt-2 pb-0" bind:this={listElement}>
         {#if loading}
             <div class="flex justify-center items-center h-full">
                 <CircleNotch class="w-8 h-8 animate-spin text-gray-500" />
@@ -212,7 +305,7 @@
     </div>
     
     <!-- Status bar - fixed at bottom -->
-    <div class="job-footer">
+    <div class="job-footer flex-shrink-0">
         <span>
             {filteredJobs.length} of {jobs.length} jobs
             {#if filterStatus !== 'all'}
@@ -235,12 +328,14 @@
     /* Search area */
     .job-search {
         padding: 16px 16px 12px 16px;
+        background-color: white;
     }
 
     /* List area */
     .job-list {
         flex: 1;
         overflow-y: auto;
+        background-color: white;
     }
 
     /* Footer */
@@ -248,9 +343,9 @@
         display: flex;
         justify-content: right;
         align-items: center;
-        padding: 24px 16px;
+        padding: 12px 16px;
         border-top: 1px solid #e5e7eb;
-        background-color: primary-200;
+        background-color: white;
         font-size: 0.875rem;
         color: #4b5563;
     }
