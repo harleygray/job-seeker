@@ -51,7 +51,8 @@
         cv_page2?: string;
         cover_letter?: string;
         error?: string;
-        pdf_path?: string;
+        cv_path?: string;
+        cover_letter_path?: string;
     }
 
     // Enhanced debug function
@@ -152,12 +153,11 @@
                 throw new Error(reply.error || "Failed to generate PDFs");
             }
 
-            // Handle PDF download
-            if (reply.pdf_path) {
-                window.open(
-                    `/download-pdf/${encodeURIComponent(reply.pdf_path)}`,
-                    "_blank",
-                );
+            // PDFs generated and saved on server - show success message
+            if (reply.cv_path && reply.cover_letter_path) {
+                console.log(`CV PDF saved successfully: ${reply.cv_path}`);
+                console.log(`Cover Letter PDF saved successfully: ${reply.cover_letter_path}`);
+                // You could add a toast notification here if desired
             }
         } catch (error) {
             console.error("Failed to generate PDFs:", error);

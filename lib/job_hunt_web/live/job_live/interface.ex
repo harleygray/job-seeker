@@ -196,11 +196,87 @@ defmodule JobHuntWeb.JobLive.Interface do
     "cover_letter_content" => cover_letter,
     "companyName" => company_name
   }, socket) do
-    case JobHunt.CVGenerator.generate_pdf(content1, content2, company_name) do
-      {:ok, pdf_path} ->
-        {:reply, %{success: true, pdf_path: pdf_path}, socket}
-      {:error, reason} ->
-        {:reply, %{success: false, error: reason}, socket}
+    try do
+            # Create the generated_pdfs/company directory if it doesn't exist
+      safe_company_name = String.replace(company_name, ~r/[^a-zA-Z0-9_-]/, "_")
+      company_dir = Path.join([Application.app_dir(:job_hunt, "priv"), "static", "generated_pdfs", safe_company_name])
+      File.mkdir_p!(company_dir)
+
+      # Generate unique filename with timestamp
+      timestamp = DateTime.utc_now() |> DateTime.to_unix()
+
+      # PDF generation options - no margins
+      pdf_options = %{
+        format: "A4",
+        margin: %{
+          top: "0",
+          bottom: "0",
+          left: "0",
+          right: "0"
+        }
+      }
+
+      print_to_pdf_options = %{
+        print_background: true,
+        prefer_css_page_size: false,
+        display_header_footer: false,
+        margin_top: 0,
+        margin_bottom: 0,
+        margin_left: 0,
+        margin_right: 0
+      }
+
+            # Generate CV PDF (2 pages)
+      cv_filename = "CV_#{timestamp}.pdf"
+      cv_output_path = Path.join(company_dir, cv_filename)
+
+      # Generate Cover Letter PDF (separate file)
+      cover_filename = "CoverLetter_#{timestamp}.pdf"
+      cover_output_path = Path.join(company_dir, cover_filename)
+
+      # Add CSS to remove only page margins, preserve content styling, and force background colors
+      css_reset = "<style>@page { margin: 0 !important; } html, body { margin: 0 !important; padding: 0 !important; } * { -webkit-print-color-adjust: exact !important; color-adjust: exact !important; print-color-adjust: exact !important; }</style>"
+      content1_with_css = String.replace(content1, "<head>", "<head>#{css_reset}", global: false) |>
+                          (&if String.contains?(&1, "<head>"), do: &1, else: "#{css_reset}#{content1}").()
+      content2_with_css = String.replace(content2, "<head>", "<head>#{css_reset}", global: false) |>
+                          (&if String.contains?(&1, "<head>"), do: &1, else: "#{css_reset}#{content2}").()
+      cover_letter_with_css = String.replace(cover_letter, "<head>", "<head>#{css_reset}", global: false) |>
+                              (&if String.contains?(&1, "<head>"), do: &1, else: "#{css_reset}#{cover_letter}").()
+
+      # Generate CV PDF
+      cv_result = ChromicPDF.print_to_pdf([{:html, content1_with_css}, {:html, content2_with_css}],
+        output: cv_output_path,
+        pdf_options: pdf_options,
+        print_to_pdf: print_to_pdf_options
+      )
+
+      # Generate Cover Letter PDF
+      cover_result = ChromicPDF.print_to_pdf([{:html, cover_letter_with_css}],
+        output: cover_output_path,
+        pdf_options: pdf_options,
+        print_to_pdf: print_to_pdf_options
+      )
+
+      case {cv_result, cover_result} do
+        {:ok, :ok} ->
+          # Return relative paths for both files
+          cv_relative_path = "/generated_pdfs/#{safe_company_name}/#{cv_filename}"
+          cover_relative_path = "/generated_pdfs/#{safe_company_name}/#{cover_filename}"
+          {:reply, %{
+            success: true,
+            cv_path: cv_relative_path,
+            cover_letter_path: cover_relative_path
+          }, socket}
+
+        {{:error, cv_reason}, _} ->
+          {:reply, %{success: false, error: "Failed to generate CV PDF: #{inspect(cv_reason)}"}, socket}
+
+        {_, {:error, cover_reason}} ->
+          {:reply, %{success: false, error: "Failed to generate Cover Letter PDF: #{inspect(cover_reason)}"}, socket}
+      end
+    rescue
+      error ->
+        {:reply, %{success: false, error: "PDF generation failed: #{inspect(error)}"}, socket}
     end
   end
 
