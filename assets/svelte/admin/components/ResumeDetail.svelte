@@ -119,6 +119,10 @@
                     console.log(`Resume ${creatingResume ? 'created' : 'updated'} successfully:`, reply);
                     if (!creatingResume) {
                         editMode = false;
+                        // Refresh the resume data to sync IDs
+                        if (selectedResume && selectedResume.id) {
+                            live.pushEvent("select_resume", { id: selectedResume.id });
+                        }
                     }
                 } else {
                     console.error(`Error ${creatingResume ? 'creating' : 'updating'} resume:`, reply);
@@ -167,27 +171,49 @@
     // Remove item from a section
     function removeItem(section: string, index: number) {
         const itemToRemove = formData[section]?.[index];
-        if (itemToRemove && itemToRemove.id && live) {
-            let eventName = null;
-            switch (section) {
-                case 'experience':
-                    eventName = "remove_experience_item";
-                    break;
-                case 'education':
-                    eventName = "remove_education_item";
-                    break;
-                case 'projects':
-                    eventName = "remove_project_item";
-                    break;
-                case 'skills':
-                    eventName = "remove_skill_item";
-                    break;
-            }
-            if (eventName) {
-                live.pushEvent(eventName, { id: itemToRemove.id });
+        if (itemToRemove && live) {
+            // Check if this is a temporary item (ID starts with a large timestamp, indicating Date.now())
+            const isTemporary = itemToRemove.id && typeof itemToRemove.id === 'string' && 
+                                itemToRemove.id.length > 10 && /^\d+$/.test(itemToRemove.id);
+            
+            // Check if this is an item without a valid database ID
+            const hasValidDatabaseId = itemToRemove.id && 
+                                     typeof itemToRemove.id === 'string' && 
+                                     itemToRemove.id.length <= 10 && 
+                                     !isTemporary;
+            
+            if (isTemporary || !itemToRemove.id) {
+                // For temporary items or items without IDs, just remove from local state
+                console.log("Removing temporary/local item:", itemToRemove.id || 'no ID');
+                formData[section] = formData[section].filter((_, i) => i !== index);
+                if (section === 'experience') {
+                    formData.experience = sortExperienceByDate(formData.experience);
+                }
+                // Trigger reactivity
+                formData = { ...formData };
+            } else if (hasValidDatabaseId) {
+                // For database items, send remove event
+                let eventName = null;
+                switch (section) {
+                    case 'experience':
+                        eventName = "remove_experience_item";
+                        break;
+                    case 'education':
+                        eventName = "remove_education_item";
+                        break;
+                    case 'projects':
+                        eventName = "remove_project_item";
+                        break;
+                    case 'skills':
+                        eventName = "remove_skill_item";
+                        break;
+                }
+                if (eventName) {
+                    console.log("Removing database item:", itemToRemove.id);
+                    live.pushEvent(eventName, { id: itemToRemove.id });
+                }
             }
         }
-        // No optimistic update here, let server drive the state
     }
 
     // Get empty item structure for each section

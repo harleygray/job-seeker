@@ -238,7 +238,7 @@ defmodule JobHuntWeb.JobLive.Resume do
       # In editing mode, update the socket state
       current_resume = socket.assigns.selected_resume
       if current_resume do
-        # Find which section contains this ID
+                # Find which section contains this ID
         existing_section = cond do
           Enum.any?(current_resume["experience"], &(&1["id"] == item_id_str)) -> "experience"
           Enum.any?(current_resume["education"], &(&1["id"] == item_id_str)) -> "education"
@@ -356,7 +356,8 @@ defmodule JobHuntWeb.JobLive.Resume do
       # In editing mode, update the database
       resume_id = socket.assigns.selected_resume_id
       if resume_id do
-        resume = Context.get_resume!(resume_id)
+                resume = Context.get_resume!(resume_id)
+
         # Match either the string ID or the struct's id field
         updated_experience_list = Enum.reject(resume.experience, fn exp ->
           case exp do
@@ -365,7 +366,10 @@ defmodule JobHuntWeb.JobLive.Resume do
           end
         end)
 
-        case Context.update_resume(resume, %{experience: updated_experience_list}) do
+        # Convert structs to maps with atom keys for changeset casting
+        updated_experience_maps = Enum.map(updated_experience_list, &experience_struct_to_map/1)
+
+        case Context.update_resume(resume, %{experience: updated_experience_maps}) do
           {:ok, updated_resume_db} ->
             encoded_resume = encode_resume(updated_resume_db)
             send(self(), :load_resumes) # Reload list to reflect changes
@@ -417,7 +421,10 @@ defmodule JobHuntWeb.JobLive.Resume do
           end
         end)
 
-        case Context.update_resume(resume, %{education: updated_education_list}) do
+        # Convert structs to maps with atom keys for changeset casting
+        updated_education_maps = Enum.map(updated_education_list, &education_struct_to_map/1)
+
+        case Context.update_resume(resume, %{education: updated_education_maps}) do
           {:ok, updated_resume_db} ->
             encoded_resume = encode_resume(updated_resume_db)
             send(self(), :load_resumes) # Reload list to reflect changes
@@ -436,44 +443,94 @@ defmodule JobHuntWeb.JobLive.Resume do
   @impl true
   def handle_event("remove_project_item", %{"id" => item_id_to_remove}, socket) do
     item_id_str = to_string(item_id_to_remove)
-    current_data = socket.assigns.selected_resume || %{"projects" => []}
 
-    updated_projects = Enum.reject(current_data["projects"], &(&1["id"] == item_id_str))
-    updated_data = %{current_data | "projects" => updated_projects}
+    if socket.assigns.creating_resume do
+      # In creating mode, just update the socket state
+      current_data = socket.assigns.selected_resume || %{"projects" => []}
+      updated_projects = Enum.reject(current_data["projects"], &(&1["id"] == item_id_str))
+      updated_socket_data = %{current_data | "projects" => updated_projects}
 
-    socket = assign(socket, :selected_resume, updated_data)
-    socket = if socket.assigns.creating_resume, do: assign(socket, :creating_resume, true), else: socket
+      socket =
+        socket
+        |> assign(:selected_resume, updated_socket_data)
+        |> assign(:creating_resume, true)
 
-    # If we're not in creating mode, update the resume in the database
-    if !socket.assigns.creating_resume && socket.assigns.selected_resume_id do
-      case Context.update_resume(socket.assigns.selected_resume_id, updated_data) do
-        {:ok, _updated_resume} -> {:noreply, socket}
-        {:error, _changeset} -> {:noreply, socket}
-      end
-    else
       {:noreply, socket}
+    else
+      # In editing mode, update the database
+      resume_id = socket.assigns.selected_resume_id
+      if resume_id do
+        resume = Context.get_resume!(resume_id)
+        updated_projects_list = Enum.reject(resume.projects, fn proj ->
+          case proj do
+            %{id: id} when is_binary(id) -> id == item_id_str
+            _ -> false
+          end
+        end)
+
+        # Convert structs to maps with atom keys for changeset casting
+        updated_projects_maps = Enum.map(updated_projects_list, &project_struct_to_map/1)
+
+        case Context.update_resume(resume, %{projects: updated_projects_maps}) do
+          {:ok, updated_resume_db} ->
+            encoded_resume = encode_resume(updated_resume_db)
+            send(self(), :load_resumes) # Reload list to reflect changes
+            socket = assign(socket, :selected_resume, encoded_resume)
+            {:noreply, socket}
+          {:error, changeset} ->
+            IO.inspect(changeset, label: "Error removing project item")
+            {:noreply, socket}
+        end
+      else
+        {:noreply, socket}
+      end
     end
   end
 
   @impl true
   def handle_event("remove_skill_item", %{"id" => item_id_to_remove}, socket) do
     item_id_str = to_string(item_id_to_remove)
-    current_data = socket.assigns.selected_resume || %{"skills" => []}
 
-    updated_skills = Enum.reject(current_data["skills"], &(&1["id"] == item_id_str))
-    updated_data = %{current_data | "skills" => updated_skills}
+    if socket.assigns.creating_resume do
+      # In creating mode, just update the socket state
+      current_data = socket.assigns.selected_resume || %{"skills" => []}
+      updated_skills = Enum.reject(current_data["skills"], &(&1["id"] == item_id_str))
+      updated_socket_data = %{current_data | "skills" => updated_skills}
 
-    socket = assign(socket, :selected_resume, updated_data)
-    socket = if socket.assigns.creating_resume, do: assign(socket, :creating_resume, true), else: socket
+      socket =
+        socket
+        |> assign(:selected_resume, updated_socket_data)
+        |> assign(:creating_resume, true)
 
-    # If we're not in creating mode, update the resume in the database
-    if !socket.assigns.creating_resume && socket.assigns.selected_resume_id do
-      case Context.update_resume(socket.assigns.selected_resume_id, updated_data) do
-        {:ok, _updated_resume} -> {:noreply, socket}
-        {:error, _changeset} -> {:noreply, socket}
-      end
-    else
       {:noreply, socket}
+    else
+      # In editing mode, update the database
+      resume_id = socket.assigns.selected_resume_id
+      if resume_id do
+        resume = Context.get_resume!(resume_id)
+        updated_skills_list = Enum.reject(resume.skills, fn skill ->
+          case skill do
+            %{id: id} when is_binary(id) -> id == item_id_str
+            _ -> false
+          end
+        end)
+
+        # Convert structs to maps with atom keys for changeset casting
+        updated_skills_maps = Enum.map(updated_skills_list, &skill_struct_to_map/1)
+
+        case Context.update_resume(resume, %{skills: updated_skills_maps}) do
+          {:ok, updated_resume_db} ->
+            encoded_resume = encode_resume(updated_resume_db)
+            send(self(), :load_resumes) # Reload list to reflect changes
+            socket = assign(socket, :selected_resume, encoded_resume)
+            {:noreply, socket}
+          {:error, changeset} ->
+            IO.inspect(changeset, label: "Error removing skill item")
+            {:noreply, socket}
+        end
+      else
+        {:noreply, socket}
+      end
     end
   end
 
@@ -484,6 +541,58 @@ defmodule JobHuntWeb.JobLive.Resume do
       end)
     end)
   end
+
+  # Helper function to convert experience structs to maps with atom keys
+  defp experience_struct_to_map(%JobHunt.Resume.Experience{} = exp) do
+    %{
+      id: exp.id,
+      company: exp.company,
+      positions: exp.positions,
+      start_date: exp.start_date,
+      end_date: exp.end_date,
+      highlights: exp.highlights,
+      relevant_experience: exp.relevant_experience,
+      technologies: exp.technologies
+    }
+  end
+
+  defp experience_struct_to_map(map) when is_map(map), do: map
+
+  # Helper function to convert education structs to maps with atom keys
+  defp education_struct_to_map(%JobHunt.Resume.Education{} = edu) do
+    %{
+      id: edu.id,
+      institution: edu.institution,
+      courses: edu.courses,
+      highlights: edu.highlights
+    }
+  end
+
+  defp education_struct_to_map(map) when is_map(map), do: map
+
+  # Helper function to convert project structs to maps with atom keys
+  defp project_struct_to_map(%JobHunt.Resume.Project{} = proj) do
+    %{
+      id: proj.id,
+      name: proj.name,
+      description: proj.description,
+      technologies: proj.technologies,
+      highlights: proj.highlights
+    }
+  end
+
+  defp project_struct_to_map(map) when is_map(map), do: map
+
+  # Helper function to convert skill structs to maps with atom keys
+  defp skill_struct_to_map(%JobHunt.Resume.Skill{} = skill) do
+    %{
+      id: skill.id,
+      category: skill.category,
+      items: skill.items
+    }
+  end
+
+  defp skill_struct_to_map(map) when is_map(map), do: map
 
   # --- Resume Encoding ---
   defp encode_resume(nil), do: nil

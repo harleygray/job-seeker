@@ -108,8 +108,12 @@
 
     // Initialize form state
     function initializeFormState(): FormState {
+        // Use the provided ID, or the experience ID, or generate a new one
+        // Only generate timestamps for completely new items (when no experience object exists)
+        const itemId = experience?.id || id || Date.now().toString();
+        
         const state: FormState = {
-            id: experience?.id ?? id ?? Date.now().toString(),
+            id: itemId,
             company: experience?.company ?? "",
             positions: experience?.positions ?? [],
             start_date: experience?.start_date ?? "",

@@ -1,5 +1,4 @@
 <script lang="ts">
-    import { onMount } from "svelte";
     import Funnel from "phosphor-svelte/lib/Funnel";
     import MagnifyingGlass from "phosphor-svelte/lib/MagnifyingGlass";
     import Plus from "phosphor-svelte/lib/Plus";
@@ -19,57 +18,6 @@
     let filterStatus = $state('all');
     let showFilters = $state(false);
     let listElement;
-    let containerElement; // Add reference to container
-    let containerWidth = $state(null);
-    let containerHeight = $state(null);
-    let debugInfo = $state('Initial');
-
-    // Add ResizeObserver to track JobList container changes
-    let resizeObserver;
-
-    // Add debugging for button styles
-    let firstButton;
-    let buttonDebugInfo = $state('No buttons');
-
-    onMount(() => {
-        if (containerElement) {
-            // Log initial dimensions
-            const rect = containerElement.getBoundingClientRect();
-            containerWidth = rect.width;
-            containerHeight = rect.height;
-            console.log('JobList Initial:', { width: rect.width, height: rect.height });
-            
-            // Set up ResizeObserver
-            resizeObserver = new ResizeObserver((entries) => {
-                for (const entry of entries) {
-                    const newWidth = entry.contentRect.width;
-                    const newHeight = entry.contentRect.height;
-                    
-                    if (newWidth !== containerWidth || newHeight !== containerHeight) {
-                        console.log('JobList Container Changed:', {
-                            oldWidth: containerWidth,
-                            newWidth: newWidth,
-                            oldHeight: containerHeight,
-                            newHeight: newHeight,
-                            difference: newWidth - containerWidth
-                        });
-                        
-                        containerWidth = newWidth;
-                        containerHeight = newHeight;
-                        debugInfo = `W:${Math.round(newWidth)} H:${Math.round(newHeight)}`;
-                    }
-                }
-            });
-            
-            resizeObserver.observe(containerElement);
-        }
-        
-        return () => {
-            if (resizeObserver) {
-                resizeObserver.disconnect();
-            }
-        };
-    });
 
     // Status options for the select
     const statusOptions = [
@@ -145,49 +93,10 @@
         }
     }
 
-    function debugButtonStyles() {
-        if (firstButton) {
-            const rect = firstButton.getBoundingClientRect();
-            const computedStyle = window.getComputedStyle(firstButton);
-            
-            const info = {
-                width: rect.width,
-                height: rect.height,
-                paddingLeft: computedStyle.paddingLeft,
-                paddingRight: computedStyle.paddingRight,
-                marginLeft: computedStyle.marginLeft,
-                marginRight: computedStyle.marginRight,
-                borderLeft: computedStyle.borderLeftWidth,
-                borderRight: computedStyle.borderRightWidth,
-                fontSize: computedStyle.fontSize,
-                fontFamily: computedStyle.fontFamily
-            };
-            
-            console.log('Button Styles:', info);
-            buttonDebugInfo = `W:${Math.round(rect.width)} PL:${computedStyle.paddingLeft} PR:${computedStyle.paddingRight}`;
-            
-            return info;
-        }
-        return null;
-    }
 
-    // Track button changes
-    $effect(() => {
-        if (filteredJobs.length > 0) {
-            // Delay to ensure button is rendered
-            setTimeout(() => {
-                debugButtonStyles();
-            }, 100);
-        }
-    });
 </script>
   
-    <div class="job-container h-full flex flex-col" bind:this={containerElement} data-debug="joblist">
-    <!-- Debug info -->
-    <div class="text-xs text-gray-500 px-2 py-1 bg-yellow-100">
-        JobList: {debugInfo} | Button: {buttonDebugInfo}
-    </div>
-    
+    <div class="job-container h-full flex flex-col">
     <!-- Search and filter bar -->
     <div class="job-search flex-shrink-0">
         <div class="flex items-center w-full">

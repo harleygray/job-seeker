@@ -180,6 +180,31 @@
         }
     }
 
+    // Function to strip CSS from HTML content for safe editing
+    function stripCSSFromHTML(html: string): string {
+        if (!html) return html;
+        
+        // Create a temporary DOM element to parse HTML
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = html;
+        
+        // Remove all style tags
+        const styleTags = tempDiv.querySelectorAll('style');
+        styleTags.forEach(tag => tag.remove());
+        
+        // Remove all link tags that reference stylesheets
+        const linkTags = tempDiv.querySelectorAll('link[rel="stylesheet"]');
+        linkTags.forEach(tag => tag.remove());
+        
+        // Remove inline styles from all elements
+        const allElements = tempDiv.querySelectorAll('*');
+        allElements.forEach(element => {
+            element.removeAttribute('style');
+        });
+        
+        return tempDiv.innerHTML;
+    }
+
     function handleContentEdit(event: Event, type: "cv1" | "cv2" | "cover") {
         const target = event.target as HTMLElement;
         const content = target.innerHTML;
@@ -199,17 +224,17 @@
 
     $effect(() => {
         if (isEditing && cv1Div && !edited_cv1_content) {
-            cv1Div.innerHTML = cv_html_content1 || "";
+            cv1Div.innerHTML = stripCSSFromHTML(cv_html_content1 || "");
         }
     });
     $effect(() => {
         if (isEditing && cv2Div && !edited_cv2_content) {
-            cv2Div.innerHTML = cv_html_content2 || "";
+            cv2Div.innerHTML = stripCSSFromHTML(cv_html_content2 || "");
         }
     });
     $effect(() => {
         if (isEditing && coverDiv && !edited_cover_letter_content) {
-            coverDiv.innerHTML = cover_letter_html_content || "";
+            coverDiv.innerHTML = stripCSSFromHTML(cover_letter_html_content || "");
         }
     });
 
@@ -311,25 +336,28 @@
                 <div class="border rounded-lg p-4 w-full">
                     <h4 class="font-medium mb-2">CV Page 1</h4>
                     <div class="relative w-full overflow-x-auto">
-                        <div
-                            class="border p-4 overflow-hidden bg-white shadow-lg mx-auto"
-                            style="width: 100%; max-width: 210mm; aspect-ratio: 210/297; all: initial;"
-                            contenteditable={isEditing}
-                            oninput={isEditing
-                                ? (e) =>
-                                      (edited_cv1_content =
-                                          e.currentTarget.innerHTML)
-                                : undefined}
-                            bind:this={cv1Div}
-                        >
-                            <iframe 
-                                srcdoc={isEditing
-                                    ? edited_cv1_content || cv_html_content1
-                                    : edited_cv1_content || cv_html_content1}
-                                style="width: 100%; height: 100%; border: none;"
-                                title="CV Page 1"
-                            ></iframe>
-                        </div>
+                        {#if isEditing}
+                            <div
+                                class="border p-4 overflow-hidden bg-white shadow-lg mx-auto"
+                                style="width: 100%; max-width: 210mm; aspect-ratio: 210/297; min-height: 400px;"
+                                contenteditable={true}
+                                oninput={(e) => (edited_cv1_content = e.currentTarget.innerHTML)}
+                                bind:this={cv1Div}
+                            >
+                                <!-- Content injected via $effect -->
+                            </div>
+                        {:else}
+                            <div
+                                class="border p-4 overflow-hidden bg-white shadow-lg mx-auto"
+                                style="width: 100%; max-width: 210mm; aspect-ratio: 210/297;"
+                            >
+                                <iframe 
+                                    srcdoc={edited_cv1_content || cv_html_content1}
+                                    style="width: 100%; height: 100%; border: none;"
+                                    title="CV Page 1"
+                                ></iframe>
+                            </div>
+                        {/if}
                     </div>
                 </div>
             {/if}
@@ -338,25 +366,28 @@
                 <div class="border rounded-lg p-4 w-full">
                     <h4 class="font-medium mb-2">CV Page 2</h4>
                     <div class="relative w-full overflow-x-auto">
-                        <div
-                            class="border p-4 overflow-hidden bg-white shadow-lg mx-auto"
-                            style="width: 100%; max-width: 210mm; aspect-ratio: 210/297; all: initial;"
-                            contenteditable={isEditing}
-                            oninput={isEditing
-                                ? (e) =>
-                                      (edited_cv2_content =
-                                          e.currentTarget.innerHTML)
-                                : undefined}
-                            bind:this={cv2Div}
-                        >
-                            <iframe 
-                                srcdoc={isEditing
-                                    ? edited_cv2_content || cv_html_content2
-                                    : edited_cv2_content || cv_html_content2}
-                                style="width: 100%; height: 100%; border: none;"
-                                title="CV Page 2"
-                            ></iframe>
-                        </div>
+                        {#if isEditing}
+                            <div
+                                class="border p-4 overflow-hidden bg-white shadow-lg mx-auto"
+                                style="width: 100%; max-width: 210mm; aspect-ratio: 210/297; min-height: 400px;"
+                                contenteditable={true}
+                                oninput={(e) => (edited_cv2_content = e.currentTarget.innerHTML)}
+                                bind:this={cv2Div}
+                            >
+                                <!-- Content injected via $effect -->
+                            </div>
+                        {:else}
+                            <div
+                                class="border p-4 overflow-hidden bg-white shadow-lg mx-auto"
+                                style="width: 100%; max-width: 210mm; aspect-ratio: 210/297;"
+                            >
+                                <iframe 
+                                    srcdoc={edited_cv2_content || cv_html_content2}
+                                    style="width: 100%; height: 100%; border: none;"
+                                    title="CV Page 2"
+                                ></iframe>
+                            </div>
+                        {/if}
                     </div>
                 </div>
             {/if}
@@ -365,27 +396,28 @@
                 <div class="border rounded-lg p-4 w-full">
                     <h4 class="font-medium mb-2">Cover Letter</h4>
                     <div class="relative w-full overflow-x-auto">
-                        <div
-                            class="border p-4 overflow-hidden bg-white shadow-lg mx-auto"
-                            style="width: 100%; max-width: 210mm; aspect-ratio: 210/297; all: initial;"
-                            contenteditable={isEditing}
-                            oninput={isEditing
-                                ? (e) =>
-                                      (edited_cover_letter_content =
-                                          e.currentTarget.innerHTML)
-                                : undefined}
-                            bind:this={coverDiv}
-                        >
-                            <iframe 
-                                srcdoc={isEditing
-                                    ? edited_cover_letter_content ||
-                                      cover_letter_html_content
-                                    : edited_cover_letter_content ||
-                                      cover_letter_html_content}
-                                style="width: 100%; height: 100%; border: none;"
-                                title="Cover Letter"
-                            ></iframe>
-                        </div>
+                        {#if isEditing}
+                            <div
+                                class="border p-4 overflow-hidden bg-white shadow-lg mx-auto"
+                                style="width: 100%; max-width: 210mm; aspect-ratio: 210/297; min-height: 400px;"
+                                contenteditable={true}
+                                oninput={(e) => (edited_cover_letter_content = e.currentTarget.innerHTML)}
+                                bind:this={coverDiv}
+                            >
+                                <!-- Content injected via $effect -->
+                            </div>
+                        {:else}
+                            <div
+                                class="border p-4 overflow-hidden bg-white shadow-lg mx-auto"
+                                style="width: 100%; max-width: 210mm; aspect-ratio: 210/297;"
+                            >
+                                <iframe 
+                                    srcdoc={edited_cover_letter_content || cover_letter_html_content}
+                                    style="width: 100%; height: 100%; border: none;"
+                                    title="Cover Letter"
+                                ></iframe>
+                            </div>
+                        {/if}
                     </div>
                 </div>
             {/if}
