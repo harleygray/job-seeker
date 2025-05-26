@@ -180,26 +180,64 @@
         }
     }
 
-    // Function to strip CSS from HTML content for safe editing
-    function stripCSSFromHTML(html: string): string {
+    // Function to scope CSS from HTML content for safe editing
+    function scopeCSSForEditing(html: string, scopeId: string): string {
         if (!html) return html;
         
         // Create a temporary DOM element to parse HTML
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = html;
         
-        // Remove all style tags
+        // Find all style tags and scope their CSS rules
         const styleTags = tempDiv.querySelectorAll('style');
-        styleTags.forEach(tag => tag.remove());
+        styleTags.forEach(styleTag => {
+            if (styleTag.textContent) {
+                // Scope CSS rules by prefixing selectors with a unique class
+                const scopedCSS = styleTag.textContent.replace(
+                    /([^{}]+)\s*{/g, 
+                    (match, selector) => {
+                        // Don't scope @rules (like @media, @keyframes)
+                        if (selector.trim().startsWith('@')) {
+                            return match;
+                        }
+                        // Add scope class to each selector
+                        const scopedSelector = selector
+                            .split(',')
+                            .map(s => `.${scopeId} ${s.trim()}`)
+                            .join(', ');
+                        return `${scopedSelector} {`;
+                    }
+                );
+                styleTag.textContent = scopedCSS;
+            }
+        });
         
-        // Remove all link tags that reference stylesheets
+        // Remove external stylesheet links (they could still cause conflicts)
         const linkTags = tempDiv.querySelectorAll('link[rel="stylesheet"]');
         linkTags.forEach(tag => tag.remove());
         
-        // Remove inline styles from all elements
-        const allElements = tempDiv.querySelectorAll('*');
-        allElements.forEach(element => {
-            element.removeAttribute('style');
+        return tempDiv.innerHTML;
+    }
+
+    // Function to unscope CSS from edited content for saving
+    function unscopeCSSForSaving(html: string, scopeId: string): string {
+        if (!html) return html;
+        
+        // Create a temporary DOM element to parse HTML
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = html;
+        
+        // Find all style tags and unscope their CSS rules
+        const styleTags = tempDiv.querySelectorAll('style');
+        styleTags.forEach(styleTag => {
+            if (styleTag.textContent) {
+                // Remove scope class from CSS selectors
+                const unscopedCSS = styleTag.textContent.replace(
+                    new RegExp(`\\.${scopeId}\\s+`, 'g'),
+                    ''
+                );
+                styleTag.textContent = unscopedCSS;
+            }
         });
         
         return tempDiv.innerHTML;
@@ -208,33 +246,38 @@
     function handleContentEdit(event: Event, type: "cv1" | "cv2" | "cover") {
         const target = event.target as HTMLElement;
         const content = target.innerHTML;
-
+        
+        // Unscope the CSS before saving
+        let unscopedContent;
         switch (type) {
             case "cv1":
-                edited_cv1_content = content;
+                unscopedContent = unscopeCSSForSaving(content, "cv1-edit-scope");
+                edited_cv1_content = unscopedContent;
                 break;
             case "cv2":
-                edited_cv2_content = content;
+                unscopedContent = unscopeCSSForSaving(content, "cv2-edit-scope");
+                edited_cv2_content = unscopedContent;
                 break;
             case "cover":
-                edited_cover_letter_content = content;
+                unscopedContent = unscopeCSSForSaving(content, "cover-edit-scope");
+                edited_cover_letter_content = unscopedContent;
                 break;
         }
     }
 
     $effect(() => {
         if (isEditing && cv1Div && !edited_cv1_content) {
-            cv1Div.innerHTML = stripCSSFromHTML(cv_html_content1 || "");
+            cv1Div.innerHTML = scopeCSSForEditing(cv_html_content1 || "", "cv1-edit-scope");
         }
     });
     $effect(() => {
         if (isEditing && cv2Div && !edited_cv2_content) {
-            cv2Div.innerHTML = stripCSSFromHTML(cv_html_content2 || "");
+            cv2Div.innerHTML = scopeCSSForEditing(cv_html_content2 || "", "cv2-edit-scope");
         }
     });
     $effect(() => {
         if (isEditing && coverDiv && !edited_cover_letter_content) {
-            coverDiv.innerHTML = stripCSSFromHTML(cover_letter_html_content || "");
+            coverDiv.innerHTML = scopeCSSForEditing(cover_letter_html_content || "", "cover-edit-scope");
         }
     });
 
@@ -338,10 +381,10 @@
                     <div class="relative w-full overflow-x-auto">
                         {#if isEditing}
                             <div
-                                class="border p-4 overflow-hidden bg-white shadow-lg mx-auto"
-                                style="width: 100%; max-width: 210mm; aspect-ratio: 210/297; min-height: 400px;"
+                                class="border p-4 overflow-hidden bg-white shadow-lg mx-auto cv1-edit-scope"
+                                style="width: 100%; max-width: 210mm; aspect-ratio: 210/297; min-height: 400px; position: relative; isolation: isolate; contain: layout style;"
                                 contenteditable={true}
-                                oninput={(e) => (edited_cv1_content = e.currentTarget.innerHTML)}
+                                oninput={(e) => handleContentEdit(e, "cv1")}
                                 bind:this={cv1Div}
                             >
                                 <!-- Content injected via $effect -->
@@ -368,10 +411,10 @@
                     <div class="relative w-full overflow-x-auto">
                         {#if isEditing}
                             <div
-                                class="border p-4 overflow-hidden bg-white shadow-lg mx-auto"
-                                style="width: 100%; max-width: 210mm; aspect-ratio: 210/297; min-height: 400px;"
+                                class="border p-4 overflow-hidden bg-white shadow-lg mx-auto cv2-edit-scope"
+                                style="width: 100%; max-width: 210mm; aspect-ratio: 210/297; min-height: 400px; position: relative; isolation: isolate; contain: layout style;"
                                 contenteditable={true}
-                                oninput={(e) => (edited_cv2_content = e.currentTarget.innerHTML)}
+                                oninput={(e) => handleContentEdit(e, "cv2")}
                                 bind:this={cv2Div}
                             >
                                 <!-- Content injected via $effect -->
@@ -398,10 +441,10 @@
                     <div class="relative w-full overflow-x-auto">
                         {#if isEditing}
                             <div
-                                class="border p-4 overflow-hidden bg-white shadow-lg mx-auto"
-                                style="width: 100%; max-width: 210mm; aspect-ratio: 210/297; min-height: 400px;"
+                                class="border p-4 overflow-hidden bg-white shadow-lg mx-auto cover-edit-scope"
+                                style="width: 100%; max-width: 210mm; aspect-ratio: 210/297; min-height: 400px; position: relative; isolation: isolate; contain: layout style;"
                                 contenteditable={true}
-                                oninput={(e) => (edited_cover_letter_content = e.currentTarget.innerHTML)}
+                                oninput={(e) => handleContentEdit(e, "cover")}
                                 bind:this={coverDiv}
                             >
                                 <!-- Content injected via $effect -->
