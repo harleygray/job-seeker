@@ -226,7 +226,7 @@ defmodule PDFGenerator do
           <rect width="100%" height="100%" fill="#0d334b" />
         </svg>
         <div class="left-column-content">
-          <img src="file:///#{File.cwd!()}/priv/static/images/harley.jpg" class="profile-image">
+          <img src="file:///#{File.cwd!()}/priv/static/images/profile.jpg" class="profile-image">
 
           <h2 style="text-decoration: underline; margin-bottom: 0px;">Contact</h2>
           <div style="display: flex; align-items: center; margin-top: 0px;">

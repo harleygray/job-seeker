@@ -42,9 +42,6 @@
     let coverDiv = $state<HTMLDivElement | null>(null);
     let containerDiv = $state<HTMLDivElement | null>(null);
 
-    // Add parent width tracking
-    let parentWidth = $state<number | null>(null);
-
     interface CVReply {
         success: boolean;
         cv_page1?: string;
@@ -53,38 +50,6 @@
         error?: string;
         cv_path?: string;
         cover_letter_path?: string;
-    }
-
-    // Enhanced debug function
-    function logDimensions(element: HTMLElement | null, name: string) {
-        if (element) {
-            const rect = element.getBoundingClientRect();
-            const parent = element.parentElement;
-            const parentRect = parent?.getBoundingClientRect();
-            
-            console.log(`${name} dimensions:`, {
-                width: rect.width,
-                height: rect.height,
-                offsetWidth: element.offsetWidth,
-                clientWidth: element.clientWidth,
-                scrollWidth: element.scrollWidth,
-                parentWidth: parentRect?.width,
-                parentOffsetWidth: parent?.offsetWidth,
-                parentClientWidth: parent?.clientWidth,
-                parentScrollWidth: parent?.scrollWidth,
-                parentComputedStyle: parent ? window.getComputedStyle(parent).width : null
-            });
-        }
-    }
-
-    // Debug function to log all relevant dimensions
-    function logAllDimensions() {
-        console.log('=== Dimensions Debug ===');
-        logDimensions(containerDiv, 'Container');
-        logDimensions(cv1Div, 'CV1');
-        logDimensions(cv2Div, 'CV2');
-        logDimensions(coverDiv, 'Cover');
-        console.log('=====================');
     }
 
     async function generatePreview() {
@@ -115,7 +80,6 @@
 
             // Wait for DOM update
             await tick();
-            logAllDimensions();
 
         } catch (error) {
             console.error("Failed to generate preview:", error);
@@ -281,56 +245,37 @@
         }
     });
 
-    // Add resize observer to track width changes
-    let resizeObserver: ResizeObserver;
-    
     onMount(() => {
-        console.log('DocsPreview mounted');
-        if (containerDiv) {
-            // Log initial parent dimensions
-            const parent = containerDiv.parentElement;
-            if (parent) {
-                parentWidth = parent.offsetWidth;
-                console.log('Initial parent width:', parentWidth);
-            }
-
-            resizeObserver = new ResizeObserver((entries) => {
-                for (const entry of entries) {
-                    const parent = entry.target.parentElement;
-                    const newParentWidth = parent?.offsetWidth;
-                    
-                    console.log('Container resized:', {
-                        width: entry.contentRect.width,
-                        height: entry.contentRect.height,
-                        parentWidth: newParentWidth,
-                        parentWidthChanged: newParentWidth !== parentWidth
-                    });
-                    
-                    if (newParentWidth !== parentWidth) {
-                        console.log('Parent width changed from', parentWidth, 'to', newParentWidth);
-                        parentWidth = newParentWidth;
-                    }
-                }
-            });
-            resizeObserver.observe(containerDiv);
-        }
-        
-        // Initial dimensions log
-        logAllDimensions();
-        
         return () => {
-            if (resizeObserver) {
-                resizeObserver.disconnect();
-            }
+            // Cleanup if needed
         };
     });
 </script>
 
+<style>
+    /* Hide scrollbars while maintaining scroll functionality */
+    .scrollbar-hidden {
+        /* For Webkit browsers (Chrome, Safari, Edge) */
+        scrollbar-width: none; /* Firefox */
+        -ms-overflow-style: none; /* Internet Explorer 10+ */
+    }
+    
+    .scrollbar-hidden::-webkit-scrollbar {
+        display: none; /* Webkit browsers */
+    }
+    
+    /* Also hide scrollbars in iframes */
+    :global(.scrollbar-hidden iframe) {
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+    
+    :global(.scrollbar-hidden iframe::-webkit-scrollbar) {
+        display: none;
+    }
+</style>
+
 <div class="space-y-4 w-full flex flex-col" style="width: 100%; min-width: 100%; max-width: 100%;" bind:this={containerDiv}>
-    <!-- Add debug info display -->
-    <div class="text-xs text-gray-500 mb-2">
-        Container Width: {containerDiv?.offsetWidth || 'N/A'}px | Parent Width: {parentWidth || 'N/A'}px
-    </div>
     
     <div class="flex justify-between items-center">
         <h3 class="text-lg font-medium">Document Preview</h3>
@@ -378,10 +323,10 @@
             {#if cv_html_content1}
                 <div class="border rounded-lg p-4 w-full">
                     <h4 class="font-medium mb-2">CV Page 1</h4>
-                    <div class="relative w-full overflow-x-auto">
+                    <div class="relative w-full overflow-hidden">
                         {#if isEditing}
                             <div
-                                class="border p-4 overflow-hidden bg-white shadow-lg mx-auto cv1-edit-scope"
+                                class="border overflow-auto bg-white shadow-lg mx-auto cv1-edit-scope scrollbar-hidden"
                                 style="width: 100%; max-width: 210mm; aspect-ratio: 210/297; min-height: 400px; position: relative; isolation: isolate; contain: layout style;"
                                 contenteditable={true}
                                 oninput={(e) => handleContentEdit(e, "cv1")}
@@ -391,13 +336,14 @@
                             </div>
                         {:else}
                             <div
-                                class="border p-4 overflow-hidden bg-white shadow-lg mx-auto"
+                                class="border overflow-hidden bg-white shadow-lg mx-auto"
                                 style="width: 100%; max-width: 210mm; aspect-ratio: 210/297;"
                             >
                                 <iframe 
                                     srcdoc={edited_cv1_content || cv_html_content1}
                                     style="width: 100%; height: 100%; border: none;"
                                     title="CV Page 1"
+                                    class="scrollbar-hidden"
                                 ></iframe>
                             </div>
                         {/if}
@@ -408,10 +354,10 @@
             {#if cv_html_content2}
                 <div class="border rounded-lg p-4 w-full">
                     <h4 class="font-medium mb-2">CV Page 2</h4>
-                    <div class="relative w-full overflow-x-auto">
+                    <div class="relative w-full overflow-hidden">
                         {#if isEditing}
                             <div
-                                class="border p-4 overflow-hidden bg-white shadow-lg mx-auto cv2-edit-scope"
+                                class="border overflow-auto bg-white shadow-lg mx-auto cv2-edit-scope scrollbar-hidden"
                                 style="width: 100%; max-width: 210mm; aspect-ratio: 210/297; min-height: 400px; position: relative; isolation: isolate; contain: layout style;"
                                 contenteditable={true}
                                 oninput={(e) => handleContentEdit(e, "cv2")}
@@ -421,13 +367,14 @@
                             </div>
                         {:else}
                             <div
-                                class="border p-4 overflow-hidden bg-white shadow-lg mx-auto"
+                                class="border overflow-hidden bg-white shadow-lg mx-auto"
                                 style="width: 100%; max-width: 210mm; aspect-ratio: 210/297;"
                             >
                                 <iframe 
                                     srcdoc={edited_cv2_content || cv_html_content2}
                                     style="width: 100%; height: 100%; border: none;"
                                     title="CV Page 2"
+                                    class="scrollbar-hidden"
                                 ></iframe>
                             </div>
                         {/if}
@@ -438,10 +385,10 @@
             {#if cover_letter_html_content}
                 <div class="border rounded-lg p-4 w-full">
                     <h4 class="font-medium mb-2">Cover Letter</h4>
-                    <div class="relative w-full overflow-x-auto">
+                    <div class="relative w-full overflow-hidden">
                         {#if isEditing}
                             <div
-                                class="border p-4 overflow-hidden bg-white shadow-lg mx-auto cover-edit-scope"
+                                class="border overflow-auto bg-white shadow-lg mx-auto cover-edit-scope scrollbar-hidden"
                                 style="width: 100%; max-width: 210mm; aspect-ratio: 210/297; min-height: 400px; position: relative; isolation: isolate; contain: layout style;"
                                 contenteditable={true}
                                 oninput={(e) => handleContentEdit(e, "cover")}
@@ -451,13 +398,14 @@
                             </div>
                         {:else}
                             <div
-                                class="border p-4 overflow-hidden bg-white shadow-lg mx-auto"
+                                class="border overflow-hidden bg-white shadow-lg mx-auto"
                                 style="width: 100%; max-width: 210mm; aspect-ratio: 210/297;"
                             >
                                 <iframe 
                                     srcdoc={edited_cover_letter_content || cover_letter_html_content}
                                     style="width: 100%; height: 100%; border: none;"
                                     title="Cover Letter"
+                                    class="scrollbar-hidden"
                                 ></iframe>
                             </div>
                         {/if}

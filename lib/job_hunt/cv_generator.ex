@@ -19,7 +19,7 @@ defmodule JobHunt.CVGenerator do
     linked_in_svg = File.read!("#{File.cwd!()}/priv/static/images/linked_in.svg")
     github_svg = File.read!("#{File.cwd!()}/priv/static/images/github-logo.svg")
     email_svg = File.read!("#{File.cwd!()}/priv/static/images/email.svg")
-    image_path = Path.join(:code.priv_dir(:job_hunt), "static/images/harley.jpg")
+    image_path = Path.join(:code.priv_dir(:job_hunt), "static/images/profile.jpg")
     image_data = File.read!(image_path) |> Base.encode64()
     profile_image = "<img src=\"data:image/jpeg;base64,#{image_data}\" class=\"profile-image\">"
 
@@ -65,8 +65,16 @@ defmodule JobHunt.CVGenerator do
       education: %{
         heading: "Education",
         items: (resume.education || []) |> Enum.map(fn edu ->
+          # Format courses as a comma-separated string
+          courses_text = case edu.courses do
+            nil -> ""
+            [] -> ""
+            courses -> Enum.join(courses, ", ")
+          end
+
           %{
             sub_heading: edu.institution,
+            courses: courses_text,
             highlights: edu.highlights || []
           }
         end)
@@ -124,6 +132,7 @@ defmodule JobHunt.CVGenerator do
                 #{if Map.has_key?(item, :date), do: "<span class=\"date-text\">#{item.date}</span>", else: ""}
               </h3>
               #{if Map.has_key?(item, :positions) and item.positions != "", do: "<p class=\"position-text\">#{item.positions}</p>", else: ""}
+              #{if Map.has_key?(item, :courses) and item.courses != "", do: "<p class=\"position-text\">#{item.courses}</p>", else: ""}
             </div>
           </div>
           <ul class="highlights-list">

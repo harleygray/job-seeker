@@ -20,7 +20,7 @@ defmodule JobHunt.CoverLetterGenerator do
     linked_in_svg = File.read!("#{File.cwd!()}/priv/static/images/linked_in.svg")
     github_svg = File.read!("#{File.cwd!()}/priv/static/images/github-logo.svg")
     email_svg = File.read!("#{File.cwd!()}/priv/static/images/email.svg")
-    image_path = Path.join(:code.priv_dir(:job_hunt), "static/images/harley.jpg")
+    image_path = Path.join(:code.priv_dir(:job_hunt), "static/images/profile.jpg")
     image_data = File.read!(image_path) |> Base.encode64()
     profile_image = "<img src=\"data:image/jpeg;base64,#{image_data}\" class=\"profile-image\">"
 
@@ -139,7 +139,7 @@ defmodule JobHunt.CoverLetterGenerator do
         <div class="container">
           #{left_column_content}
           <div class="right-column">
-            <h4 style="font-size: 16pt; margin-top: 10px; margin-bottom: 0px; padding-bottom: 0px;">#{salutation}</h1>
+            <h4 style="font-size: 16pt; margin-top: 16px; margin-bottom: 0px; padding-bottom: 0px;">#{salutation}</h1>
 
             #{Phoenix.HTML.safe_to_string(formatted_cover_letter)}
 
