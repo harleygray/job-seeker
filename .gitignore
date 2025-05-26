@@ -49,3 +49,6 @@ npm-debug.log
 /priv/static/templates/
 resume.yaml
 .vscode/
+
+/lib/job_hunt/crawlers/node_modules/
+/lib/job_hunt/crawlers/temp/

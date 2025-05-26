@@ -17,7 +17,7 @@ defmodule JobHunt.CVGenerator do
     # Read the SVG files
     phone_svg = File.read!("#{File.cwd!()}/priv/static/images/phone.svg")
     linked_in_svg = File.read!("#{File.cwd!()}/priv/static/images/linked_in.svg")
-    x_svg = File.read!("#{File.cwd!()}/priv/static/images/x.svg")
+    github_svg = File.read!("#{File.cwd!()}/priv/static/images/github-logo.svg")
     email_svg = File.read!("#{File.cwd!()}/priv/static/images/email.svg")
     image_path = Path.join(:code.priv_dir(:job_hunt), "static/images/harley.jpg")
     image_data = File.read!(image_path) |> Base.encode64()
@@ -46,8 +46,16 @@ defmodule JobHunt.CVGenerator do
       experience: %{
         heading: "Experience",
         items: (resume.experience || []) |> Enum.map(fn exp ->
+          # Format positions as a comma-separated string
+          positions_text = case exp.positions do
+            nil -> ""
+            [] -> ""
+            positions -> Enum.join(positions, ", ")
+          end
+
           %{
             sub_heading: exp.company,
+            positions: positions_text,
             date: "#{exp.start_date} - #{exp.end_date}",
             highlights: exp.highlights || [],
             technologies: exp.technologies || []
@@ -115,6 +123,7 @@ defmodule JobHunt.CVGenerator do
               <h3 class="sub-heading-title">#{item.sub_heading}
                 #{if Map.has_key?(item, :date), do: "<span class=\"date-text\">#{item.date}</span>", else: ""}
               </h3>
+              #{if Map.has_key?(item, :positions) and item.positions != "", do: "<p class=\"position-text\">#{item.positions}</p>", else: ""}
             </div>
           </div>
           <ul class="highlights-list">
@@ -131,7 +140,7 @@ defmodule JobHunt.CVGenerator do
         email_svg: email_svg,
         phone_svg: phone_svg,
         linked_in_svg: linked_in_svg,
-        x_svg: x_svg
+        x_svg: github_svg
       })
 
     # Generate HTML content for page 1
