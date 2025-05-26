@@ -40,7 +40,12 @@ if you want to use this tool too:
    ```
 
 3. **Set environment variables and personalise:**
+
    Create a .env file in the project root with `GROQ_API_KEY`
+
+   Save your chosen profile photo to `/priv/static/images/profile.png`
+
+   Update your contact details in `/priv/static/left_column.html.heex`
 
 4. **Fire it up:**
    ```bash

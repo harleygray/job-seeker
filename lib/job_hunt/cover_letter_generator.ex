@@ -6,7 +6,7 @@ defmodule JobHunt.CoverLetterGenerator do
   left_column_template_path =
     Path.join(
       :code.priv_dir(:job_hunt),
-      "static/templates/left_column.html.heex"
+      "static/left_column.html.heex"
     )
 
   EEx.function_from_file(:def, :render_left_column, left_column_template_path, [:assigns])
