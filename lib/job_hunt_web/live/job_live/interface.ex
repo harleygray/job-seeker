@@ -172,6 +172,33 @@ defmodule JobHuntWeb.JobLive.Interface do
   end
 
   @impl true
+  def handle_event("delete_job", %{"id" => job_id}, socket) do
+    job = Context.get_job!(job_id)
+
+    case Context.delete_job(job) do
+      {:ok, _deleted_job} ->
+        send(self(), :load_jobs)
+
+        socket =
+          socket
+          |> assign(:selected_job_id, nil)
+          |> assign(:selected_job, nil)
+          |> assign(:creating_job, false)
+          |> put_flash(:info, "Job deleted successfully.")
+
+        {:reply, %{success: true, message: "Job deleted successfully."}, socket}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        IO.inspect(changeset, label: "Changeset errors on delete")
+        {:reply, %{success: false, errors: translate_errors(changeset)}, socket}
+
+      other ->
+        IO.inspect(other, label: "Unexpected result from Context.delete_job")
+        {:reply, %{success: false, message: "Unexpected error deleting job."}, socket}
+    end
+  end
+
+  @impl true
   def handle_event("generate_cv", %{"jobId" => job_id}, socket) do
     job = Context.get_job!(job_id)
     {html_content1, html_content2} = JobHunt.CVGenerator.generate_html()

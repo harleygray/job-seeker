@@ -1,9 +1,11 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import Check from "phosphor-svelte/lib/Check"; // Import Check icon
+    import Trash from "phosphor-svelte/lib/Trash"; // Import Trash icon
     import DocsPreview from "./DocsPreview.svelte";
 
     import { Badge } from "$lib/components/ui/badge/index.js";
+    import { Button } from "$lib/components/ui/button/index.js";
     import {
         Root,
         Trigger,
@@ -20,6 +22,7 @@
     let statusPopoverOpen = false; // State for popover visibility
     const statusOptions = ["Active", "Archived"]; // Simplified status options
     let activeTab = "details"; // Add active tab state
+    let showDeleteConfirmation = false; // State for delete confirmation
 
     let formData = {
         title: "",
@@ -46,6 +49,7 @@
         if (creatingJob) {
             console.log("Creating new job, enabling edit mode.");
             editMode = true;
+            showDeleteConfirmation = false; // Reset delete confirmation
             formData = {
                 title: "",
                 description: "",
@@ -69,6 +73,7 @@
         } else if (selectedJob) {
             console.log("Selected job updated:", selectedJob);
             editMode = false; // Default to view mode when a job is selected
+            showDeleteConfirmation = false; // Reset delete confirmation
             formData = {
                 title: selectedJob.title || "",
                 description: selectedJob.description || "",
@@ -92,6 +97,7 @@
         } else {
             // No job selected and not creating a new one
             editMode = false;
+            showDeleteConfirmation = false; // Reset delete confirmation
             formData = {
                 title: "",
                 description: "",
@@ -241,6 +247,41 @@
         }
     }
 
+    // Handle delete job
+    function deleteJob() {
+        if (!selectedJob || !live) {
+            console.error("Cannot delete: No selected job or live connection.");
+            return;
+        }
+
+        console.log(`Deleting job ${selectedJob.id}: ${selectedJob.title}`);
+        
+        live.pushEvent("delete_job", { id: selectedJob.id }, (reply) => {
+            if (reply && reply.success) {
+                console.log("Job deleted successfully:", reply);
+                showDeleteConfirmation = false;
+                // LiveView will handle clearing the selected job and refreshing the list
+            } else {
+                console.error("Error deleting job:", reply);
+                showDeleteConfirmation = false;
+            }
+        });
+    }
+
+    // Handle delete button click
+    function handleDeleteClick() {
+        if (showDeleteConfirmation) {
+            deleteJob();
+        } else {
+            showDeleteConfirmation = true;
+        }
+    }
+
+    // Cancel delete confirmation
+    function cancelDelete() {
+        showDeleteConfirmation = false;
+    }
+
     onMount(() => {
         console.log(
             "JobDetail mounted. Creating:",
@@ -333,8 +374,43 @@
             </div>
 
             {#if !creatingJob && selectedJob}
-                <!-- Controls: Edit -->
+                <!-- Controls: Edit and Delete -->
                 <div class="flex items-center space-x-4">
+                    <!-- Delete Button (only in edit mode) -->
+                    {#if editMode}
+                        <div class="flex items-center space-x-2">
+                            {#if showDeleteConfirmation}
+                                <span class="text-sm text-red-600 font-medium">Delete this job?</span>
+                                <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    onclick={handleDeleteClick}
+                                    class="px-3 py-1"
+                                >
+                                    Confirm Delete
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onclick={cancelDelete}
+                                    class="px-3 py-1"
+                                >
+                                    Cancel
+                                </Button>
+                            {:else}
+                                <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    onclick={handleDeleteClick}
+                                    class="px-3 py-1"
+                                >
+                                    <Trash class="w-4 h-4 mr-1" />
+                                    Delete
+                                </Button>
+                            {/if}
+                        </div>
+                    {/if}
+
                     <!-- Edit Mode Toggle -->
                     <div class="flex items-center">
                         <label
