@@ -2,6 +2,7 @@ defmodule JobHuntWeb.JobLive.Interface do
   use JobHuntWeb, :live_view
   use LiveSvelte.Components
   alias JobHunt.Job.Context
+  require Logger
 
   @impl true
   def mount(_params, _session, socket) do
@@ -63,7 +64,7 @@ defmodule JobHuntWeb.JobLive.Interface do
 
   @impl true
   def handle_info(:load_jobs, socket) do
-    jobs = Context.list_jobs_filtered(archived: false, applied: false)
+    jobs = Context.list_jobs_filtered(applied: false)  # Remove archived: false to get all jobs
     encoded_jobs = Enum.map(jobs, &encode_job/1)
     # IO.inspect(encoded_jobs, label: "Encoded jobs")
     socket = assign(socket, :jobs, encoded_jobs)
@@ -93,6 +94,32 @@ defmodule JobHuntWeb.JobLive.Interface do
       |> assign(:selected_job, nil)
 
     {:noreply, socket}
+  end
+
+      @impl true
+  def handle_event("sync_seek_jobs", _params, socket) do
+    # Define the Seek job search URL for AI Engineer jobs in Queensland
+    seek_url = "https://www.seek.com.au/AI-Engineer-jobs/in-Queensland-QLD?daterange=3&worktype=244%2C242"
+
+    # Get the current process PID to send reload message back to
+    liveview_pid = self()
+
+    # Start crawling with pagination (up to 3 pages) and auto-save to database
+    Task.start(fn ->
+      try do
+        Logger.info("Starting Seek job sync for AI Engineer positions in Queensland")
+        result = JobHunt.Crawlers.SeekCrawlerServer.start_crawling_with_pagination([seek_url], 3)
+        Logger.info("Seek job sync completed: #{inspect(result)}")
+
+        # Send a message to reload jobs after crawling is complete
+        send(liveview_pid, :load_jobs)
+      rescue
+        error ->
+          Logger.error("Error during Seek job sync: #{Exception.message(error)}")
+      end
+    end)
+
+    {:reply, %{success: true, message: "Seek job sync started"}, socket}
   end
 
   @impl true

@@ -3,6 +3,7 @@
     import MagnifyingGlass from "phosphor-svelte/lib/MagnifyingGlass";
     import Plus from "phosphor-svelte/lib/Plus";
     import CircleNotch from "phosphor-svelte/lib/CircleNotch";
+    import ArrowsClockwise from "phosphor-svelte/lib/ArrowsClockwise";
     import JobSearch from "../../databases/JobSearch.svelte";
 
     import * as Select from "$lib/components/ui/select/index.js";
@@ -15,7 +16,7 @@
     
     // Local state
     let searchTerm = $state('');
-    let filterStatus = $state('all');
+    let filterStatus = $state('active');
     let showFilters = $state(false);
     let listElement;
 
@@ -43,6 +44,11 @@
           const matchesStatus = filterStatus === 'all' || job.status?.toLowerCase() === filterStatus.toLowerCase();
 
           return matchesSearch && matchesStatus;
+        }).sort((a, b) => {
+          // Sort by created_at in descending order (newest first)
+          const dateA = new Date(a.created_at || 0);
+          const dateB = new Date(b.created_at || 0);
+          return dateB.getTime() - dateA.getTime();
         })
     );
       
@@ -64,6 +70,17 @@
         live.pushEvent("create_new_job", {}, (reply) => {
           if (reply && reply.success) {
             console.log("Create new job initiated:", reply.message);
+          }
+        });
+      }
+    }
+
+    // Handle syncing jobs from Seek
+    function syncJobs() {
+      if (live) {
+        live.pushEvent("sync_seek_jobs", {}, (reply) => {
+          if (reply && reply.success) {
+            console.log("Seek job sync initiated:", reply.message);
           }
         });
       }
@@ -93,6 +110,30 @@
         }
     }
 
+    // Add helper function to show time since date
+    function timeSince(dateString: string): string {
+        if (!dateString) return "-";
+        const now = new Date();
+        const date = new Date(dateString);
+        const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+        const intervals = [
+            { label: "year", seconds: 31536000 },
+            { label: "month", seconds: 2592000 },
+            { label: "day", seconds: 86400 },
+            { label: "hour", seconds: 3600 },
+            { label: "minute", seconds: 60 },
+            { label: "second", seconds: 1 }
+        ];
+
+        for (const interval of intervals) {
+            const count = Math.floor(seconds / interval.seconds);
+            if (count >= 1) {
+                return `${count} ${interval.label}${count > 1 ? "s" : ""} ago`;
+            }
+        }
+        return "just now";
+    }
 
 </script>
   
@@ -114,6 +155,15 @@
                     onclick={toggleFilters}
                 >
                     <Funnel class="w-5 h-5 font-bold" />
+                </Button>
+
+                <Button
+                    variant="action_secondary"
+                    size="sm"
+                    onclick={syncJobs}
+                    disabled={loading}
+                >
+                    <ArrowsClockwise class="w-5 h-5 font-bold" />
                 </Button>
 
                 <Button
@@ -192,9 +242,12 @@
                                         {job.title}
                                     </div>
                                     <div class="text-sm text-gray-600 mt-1">
-                                        <span class="inline-block mr-2">
+                                        <div>
                                             {job.employer || '-'}
-                                        </span>
+                                        </div>
+                                        <div class="text-xs text-gray-500 mt-0.5">
+                                            Added {job.created_at ? timeSince(job.created_at) : "-"}
+                                        </div>
                                     </div>
                                 </div>
                                 {#if job.status}

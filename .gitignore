@@ -52,3 +52,4 @@ resume.yaml
 
 /lib/job_hunt/crawlers/node_modules/
 /lib/job_hunt/crawlers/temp/
+priv/static/left_column.html.heex
