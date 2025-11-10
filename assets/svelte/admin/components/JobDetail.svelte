@@ -42,6 +42,7 @@
         product_owner_score: 0,
         applied: false,
         archived: false,
+        include_selection_criteria: false,
     };
 
     // Sync form data when selectedJob or creatingJob changes
@@ -68,6 +69,7 @@
                 product_owner_score: 0,
                 applied: false,
                 archived: false,
+                include_selection_criteria: false,
             };
             selectedJob = null; // Clear selected job when creating a new one
         } else if (selectedJob) {
@@ -93,6 +95,7 @@
                 product_owner_score: selectedJob.product_owner_score || 0,
                 applied: selectedJob.applied || false,
                 archived: selectedJob.archived || false,
+                include_selection_criteria: selectedJob.include_selection_criteria || false,
             };
         } else {
             // No job selected and not creating a new one
@@ -116,6 +119,7 @@
                 product_owner_score: 0,
                 applied: false,
                 archived: false,
+                include_selection_criteria: false,
             };
         }
     }
@@ -242,6 +246,7 @@
                 product_owner_score: selectedJob.product_owner_score || 0,
                 applied: selectedJob.applied || false,
                 archived: selectedJob.archived || false,
+                include_selection_criteria: selectedJob.include_selection_criteria || false,
             };
             editMode = false;
         }
@@ -576,6 +581,36 @@
                                         class="p-2 bg-gray-50 border border-gray-200 rounded-md min-h-[40px]"
                                     >
                                         {formData.salary || "-"}
+                                    </div>
+                                {/if}
+                            </div>
+                        </div>
+
+                        <!-- Selection Criteria Toggle -->
+                        <div>
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <label
+                                        for="includeSelectionCriteria"
+                                        class="block text-sm font-medium text-gray-700"
+                                        >Include Selection Criteria Response</label
+                                    >
+                                    <p class="text-xs text-gray-500 mt-1">
+                                        Generate a two-page Selection Criteria Response document
+                                    </p>
+                                </div>
+                                {#if editMode}
+                                    <input
+                                        type="checkbox"
+                                        id="includeSelectionCriteria"
+                                        bind:checked={formData.include_selection_criteria}
+                                        class="w-4 h-4 text-blue-600 bg-gray-100 rounded border-gray-300 focus:ring-blue-500"
+                                    />
+                                {:else}
+                                    <div
+                                        class="px-2 py-1 bg-gray-50 border border-gray-200 rounded-md text-sm"
+                                    >
+                                        {formData.include_selection_criteria ? "Yes" : "No"}
                                     </div>
                                 {/if}
                             </div>

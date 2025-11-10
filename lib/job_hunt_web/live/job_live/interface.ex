@@ -163,16 +163,16 @@ defmodule JobHuntWeb.JobLive.Interface do
   def handle_event("update_job", %{"id" => job_id} = job_params, socket) do
     job = Context.get_job!(job_id)
 
-    # Translate incoming status to actual DB fields if present
-    update_attrs =
-      if status = job_params["status"] do
-         params_from_status(status)
-      else
-        # If status isn't the only param, handle others (e.g., from full form save)
-        job_params
-        |> Map.delete("id") # Remove id as it's not a schema field
-        |> Map.delete("status") # Remove derived status if present
-      end
+    # Determine if this is a status-only update or a full form save
+    update_attrs = if Map.keys(job_params) == ["id", "status"] do
+      # Status-only update (from the popover)
+      params_from_status(job_params["status"])
+    else
+      # Full form save - process all fields
+      job_params
+      |> Map.delete("id") # Remove id as it's not a schema field
+      |> Map.delete("status") # Remove derived status if present
+    end
 
     IO.inspect(update_attrs, label: "Attrs for Context.update_job")
 
@@ -235,12 +235,34 @@ defmodule JobHuntWeb.JobLive.Interface do
       job.employer
     )
 
-    {:reply, %{
+    # Generate selection criteria response if enabled
+    selection_criteria_response = if job.include_selection_criteria do
+      {sc_page1, sc_page2} = JobHunt.SelectionCriteriaGenerator.generate_html(
+        job.description,
+        job.employer
+      )
+      %{page1: sc_page1, page2: sc_page2}
+    else
+      nil
+    end
+
+    response = %{
       success: true,
       cv_page1: html_content1,
       cv_page2: html_content2,
       cover_letter: cover_letter
-    }, socket}
+    }
+
+    response = if selection_criteria_response do
+      Map.merge(response, %{
+        selection_criteria_page1: selection_criteria_response.page1,
+        selection_criteria_page2: selection_criteria_response.page2
+      })
+    else
+      response
+    end
+
+    {:reply, response, socket}
   end
 
   @impl true
@@ -249,7 +271,7 @@ defmodule JobHuntWeb.JobLive.Interface do
     "cv_content2" => content2,
     "cover_letter_content" => cover_letter,
     "companyName" => company_name
-  }, socket) do
+  } = params, socket) do
     try do
             # Create the generated_pdfs/company directory if it doesn't exist
       safe_company_name = String.replace(company_name, ~r/[^a-zA-Z0-9_-]/, "_")
@@ -311,17 +333,46 @@ defmodule JobHuntWeb.JobLive.Interface do
         print_to_pdf: print_to_pdf_options
       )
 
-      case {cv_result, cover_result} do
-        {:ok, :ok} ->
-          # Return relative paths for both files
+      # Generate Selection Criteria PDF if content is provided
+      selection_criteria_result = if Map.has_key?(params, "selection_criteria_content1") and Map.has_key?(params, "selection_criteria_content2") do
+        sc_filename = "SelectionCriteria_#{timestamp}.pdf"
+        sc_output_path = Path.join(company_dir, sc_filename)
+
+        sc_content1_with_css = String.replace(params["selection_criteria_content1"], "<head>", "<head>#{css_reset}", global: false) |>
+                               (&if String.contains?(&1, "<head>"), do: &1, else: "#{css_reset}#{params["selection_criteria_content1"]}").()
+        sc_content2_with_css = String.replace(params["selection_criteria_content2"], "<head>", "<head>#{css_reset}", global: false) |>
+                               (&if String.contains?(&1, "<head>"), do: &1, else: "#{css_reset}#{params["selection_criteria_content2"]}").()
+
+        ChromicPDF.print_to_pdf([{:html, sc_content1_with_css}, {:html, sc_content2_with_css}],
+          output: sc_output_path,
+          pdf_options: pdf_options,
+          print_to_pdf: print_to_pdf_options
+        )
+      else
+        :ok
+      end
+
+      case {cv_result, cover_result, selection_criteria_result} do
+        {:ok, :ok, :ok} ->
+          # Return relative paths for all files
           cv_relative_path = "/generated_pdfs/#{safe_company_name}/#{cv_filename}"
           cover_relative_path = "/generated_pdfs/#{safe_company_name}/#{cover_filename}"
-          {:reply, %{
+
+          response = %{
             success: true,
             cv_path: cv_relative_path,
             cover_letter_path: cover_relative_path
-          }, socket}
+          }
 
+          response = if Map.has_key?(params, "selection_criteria_content1") do
+            sc_filename = "SelectionCriteria_#{timestamp}.pdf"
+            sc_relative_path = "/generated_pdfs/#{safe_company_name}/#{sc_filename}"
+            Map.put(response, :selection_criteria_path, sc_relative_path)
+          else
+            response
+          end
+
+          {:reply, response, socket}
 
         other ->
           {:reply, %{success: false, error: "Unexpected PDF generation result: #{inspect(other)}"}, socket}
@@ -362,6 +413,7 @@ defmodule JobHuntWeb.JobLive.Interface do
       "product_owner_score" => job.product_owner_score || 0,
       "applied" => job.applied || false,
       "archived" => job.archived || false,
+      "include_selection_criteria" => job.include_selection_criteria || false,
       "created_at" => job.inserted_at,
       "updated_at" => job.updated_at
     }

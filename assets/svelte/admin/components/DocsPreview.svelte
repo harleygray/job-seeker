@@ -23,6 +23,7 @@
             product_owner_score: number;
             applied: boolean;
             archived: boolean;
+            include_selection_criteria: boolean;
         } | null;
         live: any;
     }>();
@@ -30,9 +31,13 @@
     let cv_html_content1 = $state<string | null>(null);
     let cv_html_content2 = $state<string | null>(null);
     let cover_letter_html_content = $state<string | null>(null);
+    let selection_criteria_content1 = $state<string | null>(null);
+    let selection_criteria_content2 = $state<string | null>(null);
     let edited_cv1_content = $state<string | null>(null);
     let edited_cv2_content = $state<string | null>(null);
     let edited_cover_letter_content = $state<string | null>(null);
+    let edited_selection_criteria1_content = $state<string | null>(null);
+    let edited_selection_criteria2_content = $state<string | null>(null);
     let loading = $state(false);
     let error = $state<string | null>(null);
     let isEditing = $state(false);
@@ -40,6 +45,8 @@
     let cv1Div = $state<HTMLDivElement | null>(null);
     let cv2Div = $state<HTMLDivElement | null>(null);
     let coverDiv = $state<HTMLDivElement | null>(null);
+    let sc1Div = $state<HTMLDivElement | null>(null);
+    let sc2Div = $state<HTMLDivElement | null>(null);
     let containerDiv = $state<HTMLDivElement | null>(null);
 
     interface CVReply {
@@ -47,9 +54,12 @@
         cv_page1?: string;
         cv_page2?: string;
         cover_letter?: string;
+        selection_criteria_page1?: string;
+        selection_criteria_page2?: string;
         error?: string;
         cv_path?: string;
         cover_letter_path?: string;
+        selection_criteria_path?: string;
     }
 
     async function generatePreview() {
@@ -77,6 +87,8 @@
             cv_html_content1 = reply.cv_page1;
             cv_html_content2 = reply.cv_page2;
             cover_letter_html_content = reply.cover_letter;
+            selection_criteria_content1 = reply.selection_criteria_page1;
+            selection_criteria_content2 = reply.selection_criteria_page2;
 
             // Wait for DOM update
             await tick();
@@ -97,20 +109,24 @@
             loading = true;
             error = null;
 
+            const payload: any = {
+                cv_content1: edited_cv1_content || cv_html_content1,
+                cv_content2: edited_cv2_content || cv_html_content2,
+                cover_letter_content:
+                    edited_cover_letter_content ||
+                    cover_letter_html_content,
+                jobId: selectedJob.id,
+                companyName: selectedJob.employer,
+            };
+
+            // Add selection criteria content if available
+            if (selection_criteria_content1 && selection_criteria_content2) {
+                payload.selection_criteria_content1 = edited_selection_criteria1_content || selection_criteria_content1;
+                payload.selection_criteria_content2 = edited_selection_criteria2_content || selection_criteria_content2;
+            }
+
             const reply = await new Promise<CVReply>((resolve) => {
-                live.pushEvent(
-                    "generate_pdf",
-                    {
-                        cv_content1: edited_cv1_content || cv_html_content1,
-                        cv_content2: edited_cv2_content || cv_html_content2,
-                        cover_letter_content:
-                            edited_cover_letter_content ||
-                            cover_letter_html_content,
-                        jobId: selectedJob.id,
-                        companyName: selectedJob.employer,
-                    },
-                    resolve,
-                );
+                live.pushEvent("generate_pdf", payload, resolve);
             });
 
             if (!reply.success) {
@@ -141,6 +157,8 @@
             edited_cv1_content = null;
             edited_cv2_content = null;
             edited_cover_letter_content = null;
+            edited_selection_criteria1_content = null;
+            edited_selection_criteria2_content = null;
         }
     }
 
@@ -207,7 +225,7 @@
         return tempDiv.innerHTML;
     }
 
-    function handleContentEdit(event: Event, type: "cv1" | "cv2" | "cover") {
+    function handleContentEdit(event: Event, type: "cv1" | "cv2" | "cover" | "sc1" | "sc2") {
         const target = event.target as HTMLElement;
         const content = target.innerHTML;
         
@@ -226,6 +244,14 @@
                 unscopedContent = unscopeCSSForSaving(content, "cover-edit-scope");
                 edited_cover_letter_content = unscopedContent;
                 break;
+            case "sc1":
+                unscopedContent = unscopeCSSForSaving(content, "sc1-edit-scope");
+                edited_selection_criteria1_content = unscopedContent;
+                break;
+            case "sc2":
+                unscopedContent = unscopeCSSForSaving(content, "sc2-edit-scope");
+                edited_selection_criteria2_content = unscopedContent;
+                break;
         }
     }
 
@@ -242,6 +268,16 @@
     $effect(() => {
         if (isEditing && coverDiv && !edited_cover_letter_content) {
             coverDiv.innerHTML = scopeCSSForEditing(cover_letter_html_content || "", "cover-edit-scope");
+        }
+    });
+    $effect(() => {
+        if (isEditing && sc1Div && !edited_selection_criteria1_content) {
+            sc1Div.innerHTML = scopeCSSForEditing(selection_criteria_content1 || "", "sc1-edit-scope");
+        }
+    });
+    $effect(() => {
+        if (isEditing && sc2Div && !edited_selection_criteria2_content) {
+            sc2Div.innerHTML = scopeCSSForEditing(selection_criteria_content2 || "", "sc2-edit-scope");
         }
     });
 
@@ -405,6 +441,68 @@
                                     srcdoc={edited_cover_letter_content || cover_letter_html_content}
                                     style="width: 100%; height: 100%; border: none;"
                                     title="Cover Letter"
+                                    class="scrollbar-hidden"
+                                ></iframe>
+                            </div>
+                        {/if}
+                    </div>
+                </div>
+            {/if}
+
+            {#if selection_criteria_content1}
+                <div class="border rounded-lg p-4 w-full">
+                    <h4 class="font-medium mb-2">Selection Criteria Response - Page 1</h4>
+                    <div class="relative w-full overflow-hidden">
+                        {#if isEditing}
+                            <div
+                                class="border overflow-auto bg-white shadow-lg mx-auto sc1-edit-scope scrollbar-hidden"
+                                style="width: 100%; max-width: 210mm; aspect-ratio: 210/297; min-height: 400px; position: relative; isolation: isolate; contain: layout style;"
+                                contenteditable={true}
+                                oninput={(e) => handleContentEdit(e, "sc1")}
+                                bind:this={sc1Div}
+                            >
+                                <!-- Content injected via $effect -->
+                            </div>
+                        {:else}
+                            <div
+                                class="border overflow-hidden bg-white shadow-lg mx-auto"
+                                style="width: 100%; max-width: 210mm; aspect-ratio: 210/297;"
+                            >
+                                <iframe 
+                                    srcdoc={edited_selection_criteria1_content || selection_criteria_content1}
+                                    style="width: 100%; height: 100%; border: none;"
+                                    title="Selection Criteria Response Page 1"
+                                    class="scrollbar-hidden"
+                                ></iframe>
+                            </div>
+                        {/if}
+                    </div>
+                </div>
+            {/if}
+
+            {#if selection_criteria_content2}
+                <div class="border rounded-lg p-4 w-full">
+                    <h4 class="font-medium mb-2">Selection Criteria Response - Page 2</h4>
+                    <div class="relative w-full overflow-hidden">
+                        {#if isEditing}
+                            <div
+                                class="border overflow-auto bg-white shadow-lg mx-auto sc2-edit-scope scrollbar-hidden"
+                                style="width: 100%; max-width: 210mm; aspect-ratio: 210/297; min-height: 400px; position: relative; isolation: isolate; contain: layout style;"
+                                contenteditable={true}
+                                oninput={(e) => handleContentEdit(e, "sc2")}
+                                bind:this={sc2Div}
+                            >
+                                <!-- Content injected via $effect -->
+                            </div>
+                        {:else}
+                            <div
+                                class="border overflow-hidden bg-white shadow-lg mx-auto"
+                                style="width: 100%; max-width: 210mm; aspect-ratio: 210/297;"
+                            >
+                                <iframe 
+                                    srcdoc={edited_selection_criteria2_content || selection_criteria_content2}
+                                    style="width: 100%; height: 100%; border: none;"
+                                    title="Selection Criteria Response Page 2"
                                     class="scrollbar-hidden"
                                 ></iframe>
                             </div>

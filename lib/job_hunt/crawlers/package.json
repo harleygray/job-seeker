@@ -1,0 +1,11 @@
+{
+  "name": "civic_forum_crawlers",
+  "version": "1.0.0",
+  "description": "Crawlers for Civic Forum",
+  "main": "index.js",
+  "type": "module",
+  "dependencies": {
+    "crawlee": "^3.7.3",
+    "pdf-lib": "^1.17.1"
+  }
+}

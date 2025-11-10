@@ -15,6 +15,11 @@ defmodule JobHunt.Application do
       {Phoenix.PubSub, name: JobHunt.PubSub},
       # Start the Finch HTTP client for sending emails
       {Finch, name: JobHunt.Finch},
+      # Start Task Supervisor for crawler tasks
+      {Task.Supervisor, name: JobHunt.TaskSupervisor},
+      # Start Seek crawler services
+      JobHunt.Crawlers.SeekCrawlerServer,
+      JobHunt.Crawlers.SeekChunkTaskQueue,
       # Start a worker by calling: JobHunt.Worker.start_link(arg)
       # {JobHunt.Worker, arg},
       # Start to serve requests, typically the last entry

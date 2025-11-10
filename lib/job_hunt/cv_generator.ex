@@ -17,6 +17,7 @@ defmodule JobHunt.CVGenerator do
     # Read the SVG files
     phone_svg = File.read!("#{File.cwd!()}/priv/static/images/phone.svg")
     linked_in_svg = File.read!("#{File.cwd!()}/priv/static/images/linked_in.svg")
+    cf_svg = File.read!("#{File.cwd!()}/priv/static/images/civic_forum.svg")
     github_svg = File.read!("#{File.cwd!()}/priv/static/images/github-logo.svg")
     email_svg = File.read!("#{File.cwd!()}/priv/static/images/email.svg")
     image_path = Path.join(:code.priv_dir(:job_hunt), "static/images/profile.jpg")
@@ -149,7 +150,8 @@ defmodule JobHunt.CVGenerator do
         email_svg: email_svg,
         phone_svg: phone_svg,
         linked_in_svg: linked_in_svg,
-        x_svg: github_svg
+        github_svg: github_svg,
+        cf_svg: cf_svg
       })
 
     # Generate HTML content for page 1

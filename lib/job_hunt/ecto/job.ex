@@ -19,6 +19,7 @@ defmodule JobHunt.Job do
     field :product_owner_score, :integer
     field :applied, :boolean, default: false
     field :archived, :boolean, default: false
+    field :include_selection_criteria, :boolean, default: false
 
     timestamps()
   end
@@ -41,7 +42,8 @@ defmodule JobHunt.Job do
       :ai_engineer_score,
       :product_owner_score,
       :applied,
-      :archived
+      :archived,
+      :include_selection_criteria
     ])
     |> validate_required([:title, :employer, :location])
   end
