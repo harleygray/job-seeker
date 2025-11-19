@@ -107,6 +107,61 @@ defmodule JobHuntWeb.JobLive.Resume do
   end
 
   @impl true
+  def handle_event("duplicate_resume", %{"id" => resume_id}, socket) do
+    resume = Context.get_resume!(resume_id)
+
+    case Context.duplicate_resume(resume) do
+      {:ok, duplicated_resume} ->
+        send(self(), :load_resumes)
+        encoded_resume = encode_resume(duplicated_resume)
+
+        socket =
+          socket
+          |> assign(:creating_resume, false)
+          |> assign(:selected_resume_id, duplicated_resume.id)
+          |> assign(:selected_resume, encoded_resume)
+          |> put_flash(:info, "Resume duplicated successfully.")
+
+        {:reply, %{success: true, message: "Resume duplicated successfully.", resume_id: duplicated_resume.id}, socket}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        IO.inspect(changeset, label: "Changeset errors on duplicate")
+        {:reply, %{success: false, errors: translate_errors(changeset)}, socket}
+
+      other ->
+        IO.inspect(other, label: "Unexpected result from Context.duplicate_resume")
+        {:reply, %{success: false, message: "Unexpected error duplicating resume."}, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("delete_resume", %{"id" => resume_id}, socket) do
+    resume = Context.get_resume!(resume_id)
+
+    case Context.delete_resume(resume) do
+      {:ok, _deleted_resume} ->
+        send(self(), :load_resumes)
+
+        socket =
+          socket
+          |> assign(:selected_resume_id, nil)
+          |> assign(:selected_resume, nil)
+          |> assign(:creating_resume, false)
+          |> put_flash(:info, "Resume deleted successfully.")
+
+        {:reply, %{success: true, message: "Resume deleted successfully."}, socket}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        IO.inspect(changeset, label: "Changeset errors on delete")
+        {:reply, %{success: false, errors: translate_errors(changeset)}, socket}
+
+      other ->
+        IO.inspect(other, label: "Unexpected result from Context.delete_resume")
+        {:reply, %{success: false, message: "Unexpected error deleting resume."}, socket}
+    end
+  end
+
+  @impl true
   def handle_event("create_resume", resume_params, socket) do
     IO.inspect(resume_params, label: "Attempting to create resume with params")
     # Assuming Context.create_resume/1 exists

@@ -2,6 +2,8 @@
     import { onMount } from "svelte";
     import Check from "phosphor-svelte/lib/Check";
     import Plus from "phosphor-svelte/lib/Plus";
+    import Copy from "phosphor-svelte/lib/Copy";
+    import Trash from "phosphor-svelte/lib/Trash";
     import { Badge } from "$lib/components/ui/badge/index.js";  
     import { Root, Trigger, Content } from "$lib/components/ui/popover/index.js";
     import ResumeExperience from "../../databases/ResumeExperience.svelte";
@@ -17,6 +19,7 @@
     // Local state variables
     let editMode = false;
     let activeSection = 'experience'; // Track which section is being edited
+    let showDeleteConfirmation = false; // State for delete confirmation
 
     // Form data structure matching the Ecto schema
     let formData = {
@@ -53,6 +56,7 @@
 
         if (creatingResume) {
             editMode = true; // When creating, always start in edit mode.
+            showDeleteConfirmation = false; // Reset delete confirmation
             if (selectedResume && typeof selectedResume === 'object' && Object.keys(selectedResume).length > 0) {
                 formData.name = selectedResume.name || '';
                 formData.experience = selectedResume.experience ? sortExperienceByDate(selectedResume.experience) : [];
@@ -72,6 +76,7 @@
             if (selectedResume) {
                 if (currentResumeId !== previousSelectedResumeId) {
                     editMode = false;
+                    showDeleteConfirmation = false; // Reset delete confirmation when resume changes
                 }
                 formData.name = selectedResume.name || '';
                 formData.experience = selectedResume.experience ? sortExperienceByDate(selectedResume.experience) : [];
@@ -80,6 +85,7 @@
                 formData.skills = selectedResume.skills || [];
             } else { // No resume selected, not creating
                 editMode = false;
+                showDeleteConfirmation = false; // Reset delete confirmation
                 formData = {
                     name: '',
                     experience: [],
@@ -150,6 +156,55 @@
         }
     }
 
+    // Handle duplicating the resume
+    function duplicateResume() {
+        if (live && selectedResume && selectedResume.id) {
+            live.pushEvent("duplicate_resume", { id: selectedResume.id }, (reply) => {
+                if (reply && reply.success) {
+                    console.log("Resume duplicated successfully:", reply);
+                    // The LiveView will automatically select the new resume
+                } else {
+                    console.error("Error duplicating resume:", reply);
+                }
+            });
+        }
+    }
+
+    // Handle delete resume
+    function deleteResume() {
+        if (!selectedResume || !live || creatingResume) {
+            console.error("Cannot delete: No selected resume, no live connection, or creating resume.");
+            return;
+        }
+
+        console.log(`Deleting resume ${selectedResume.id}: ${selectedResume.name}`);
+        
+        live.pushEvent("delete_resume", { id: selectedResume.id }, (reply) => {
+            if (reply && reply.success) {
+                console.log("Resume deleted successfully:", reply);
+                showDeleteConfirmation = false;
+                // LiveView will handle clearing the selected resume and refreshing the list
+            } else {
+                console.error("Error deleting resume:", reply);
+                showDeleteConfirmation = false;
+            }
+        });
+    }
+
+    // Handle delete button click
+    function handleDeleteClick() {
+        if (showDeleteConfirmation) {
+            deleteResume();
+        } else {
+            showDeleteConfirmation = true;
+        }
+    }
+
+    // Cancel delete confirmation
+    function cancelDelete() {
+        showDeleteConfirmation = false;
+    }
+
     // Add new item to a section
     function addItem(section: string) {
         const newItem = {
@@ -172,15 +227,10 @@
     function removeItem(section: string, index: number) {
         const itemToRemove = formData[section]?.[index];
         if (itemToRemove && live) {
-            // Check if this is a temporary item (ID starts with a large timestamp, indicating Date.now())
+            // Check if this is a temporary item (ID is a large numeric timestamp from Date.now())
+            // Date.now() returns a 13-digit number, so temporary IDs will be 13+ character numeric strings
             const isTemporary = itemToRemove.id && typeof itemToRemove.id === 'string' && 
-                                itemToRemove.id.length > 10 && /^\d+$/.test(itemToRemove.id);
-            
-            // Check if this is an item without a valid database ID
-            const hasValidDatabaseId = itemToRemove.id && 
-                                     typeof itemToRemove.id === 'string' && 
-                                     itemToRemove.id.length <= 10 && 
-                                     !isTemporary;
+                                itemToRemove.id.length >= 13 && /^\d+$/.test(itemToRemove.id);
             
             if (isTemporary || !itemToRemove.id) {
                 // For temporary items or items without IDs, just remove from local state
@@ -191,8 +241,8 @@
                 }
                 // Trigger reactivity
                 formData = { ...formData };
-            } else if (hasValidDatabaseId) {
-                // For database items, send remove event
+            } else {
+                // For database items (any ID that's not temporary), send remove event
                 let eventName = null;
                 switch (section) {
                     case 'experience':
@@ -316,6 +366,15 @@
 
             {#if !creatingResume && selectedResume}
                 <div class="flex items-center space-x-4">
+                    <button
+                        type="button"
+                        onclick={duplicateResume}
+                        class="flex items-center px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+                        title="Duplicate this resume"
+                    >
+                        <Copy class="w-4 h-4 mr-1.5" />
+                        Duplicate
+                    </button>
                     <div class="flex items-center">
                         <label for="editModeToggle" class="mr-2 text-sm font-medium text-gray-700">Edit Mode</label>
                         <input
@@ -579,21 +638,55 @@
 
         <!-- Action Buttons -->
         {#if editMode}
-            <div class="flex justify-end gap-3 pt-4">
-                <button
-                    type="button"
-                    onclick={cancelEdit}
-                    class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
-                >
-                    Cancel
-                </button>
-                <button
-                    type="button"
-                    onclick={saveResume}
-                    class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                >
-                    {creatingResume ? 'Create Resume' : 'Save Changes'}
-                </button>
+            <div class="flex justify-between items-center gap-3 pt-4 border-t">
+                {#if !creatingResume && selectedResume}
+                    <div class="flex items-center gap-3">
+                        {#if showDeleteConfirmation}
+                            <span class="text-sm text-red-600 font-medium">Delete this resume?</span>
+                            <button
+                                type="button"
+                                onclick={handleDeleteClick}
+                                class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                            >
+                                Confirm Delete
+                            </button>
+                            <button
+                                type="button"
+                                onclick={cancelDelete}
+                                class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+                            >
+                                Cancel
+                            </button>
+                        {:else}
+                            <button
+                                type="button"
+                                onclick={handleDeleteClick}
+                                class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 flex items-center"
+                            >
+                                <Trash class="w-4 h-4 mr-1" />
+                                Delete Resume
+                            </button>
+                        {/if}
+                    </div>
+                {:else}
+                    <div></div>
+                {/if}
+                <div class="flex gap-3">
+                    <button
+                        type="button"
+                        onclick={cancelEdit}
+                        class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="button"
+                        onclick={saveResume}
+                        class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                    >
+                        {creatingResume ? 'Create Resume' : 'Save Changes'}
+                    </button>
+                </div>
             </div>
         {/if}
     {/if}

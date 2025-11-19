@@ -67,7 +67,7 @@ defmodule JobHunt.CoverLetterGenerator do
 
         {:error, reason} ->
           IO.puts("Failed to generate cover letter: #{inspect(reason)}")
-          "<p>Failed to generate cover letter. Please try again.</p>"
+          Phoenix.HTML.raw("<p>Failed to generate cover letter. Please try again.</p>")
       end
 
     left_column_content =
@@ -123,6 +123,55 @@ defmodule JobHunt.CoverLetterGenerator do
 
       IO.puts("Final PDF generated: #{final_output_path}")
       {:ok, final_output_path}
+    rescue
+      e -> {:error, Exception.message(e)}
+    end
+  end
+
+  def generate_docx(html_content, company_name, filename \\ nil) do
+    try do
+      # Generate the directory structure
+      base_pdf_dir = "priv/static/generated_pdfs"
+      output_dir = Path.join(base_pdf_dir, company_name)
+      File.mkdir_p!(output_dir)
+
+      # Define the output path - use provided filename or default
+      final_output_path = if filename do
+        Path.join(output_dir, filename)
+      else
+        Path.join(output_dir, "Harley Gray Cover Letter.docx")
+      end
+
+      # Write HTML to temporary file
+      temp_html_path = Path.join(System.tmp_dir(), "cover_letter_#{:rand.uniform(1000000)}.html")
+      File.write!(temp_html_path, html_content)
+
+      # Use Pandoc to convert HTML to DOCX
+      case System.cmd("which", ["pandoc"]) do
+        {_, 0} ->
+          # Pandoc is available, use it
+          case System.cmd("pandoc", [
+                 temp_html_path,
+                 "-o", final_output_path,
+                 "--standalone",
+                 "--from=html",
+                 "--to=docx"
+               ]) do
+            {_, 0} ->
+              File.rm(temp_html_path)
+              IO.puts("Final DOCX generated: #{final_output_path}")
+              {:ok, final_output_path}
+
+            {error_output, exit_code} ->
+              File.rm(temp_html_path)
+              {:error, "Pandoc conversion failed (exit code #{exit_code}): #{error_output}"}
+          end
+
+        _ ->
+          # Pandoc not found
+          File.rm(temp_html_path)
+          {:error, "Pandoc is not installed. Please install Pandoc to generate DOCX files. Install from: https://pandoc.org/installing.html"}
+      end
     rescue
       e -> {:error, Exception.message(e)}
     end

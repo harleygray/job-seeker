@@ -122,4 +122,67 @@ defmodule JobHunt.Resume.Context do
   def change_resume(%Resume{} = resume, attrs \\ %{}) do
     Resume.changeset(resume, attrs)
   end
+
+  @doc """
+  Duplicates a resume with a new name "{original_name} - Copy".
+
+  ## Examples
+
+      iex> duplicate_resume(resume)
+      {:ok, %Resume{}}
+
+      iex> duplicate_resume(resume)
+      {:error, %Ecto.Changeset{}}
+
+  """
+  def duplicate_resume(%Resume{} = resume) do
+    # Helper function to generate a unique ID
+    generate_id = fn ->
+      :crypto.strong_rand_bytes(16)
+      |> Base.encode16(case: :lower)
+    end
+
+    # Convert embedded structs to maps and generate new IDs
+    attrs = %{
+      name: "#{resume.name} - Copy",
+      experience: Enum.map(resume.experience, fn exp ->
+        %{
+          id: generate_id.(),
+          company: exp.company,
+          positions: exp.positions,
+          start_date: exp.start_date,
+          end_date: exp.end_date,
+          highlights: exp.highlights,
+          relevant_experience: exp.relevant_experience,
+          technologies: exp.technologies
+        }
+      end),
+      education: Enum.map(resume.education, fn edu ->
+        %{
+          id: generate_id.(),
+          institution: edu.institution,
+          courses: edu.courses,
+          highlights: edu.highlights
+        }
+      end),
+      projects: Enum.map(resume.projects, fn proj ->
+        %{
+          id: generate_id.(),
+          name: proj.name,
+          description: proj.description,
+          technologies: proj.technologies,
+          highlights: proj.highlights
+        }
+      end),
+      skills: Enum.map(resume.skills, fn skill ->
+        %{
+          id: generate_id.(),
+          category: skill.category,
+          items: skill.items
+        }
+      end)
+    }
+
+    create_resume(attrs)
+  end
 end

@@ -16,6 +16,7 @@
     export let live;
     export let selectedJob = null; // Renamed from selectedTemplate
     export let creatingJob = false; // Prop to indicate new job creation mode
+    export let resumes = []; // List of available resumes
 
     // Local state variables
     let editMode = false;
@@ -730,7 +731,7 @@
                 {:else if activeTab === "documents"}
                     <!-- Documents Tab -->
                     <div class="w-full">
-                        <DocsPreview {editMode} {selectedJob} {live} />
+                        <DocsPreview {editMode} {selectedJob} {live} {resumes} />
                     </div>
                 {/if}
             </div>

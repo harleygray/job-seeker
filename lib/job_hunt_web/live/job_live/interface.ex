@@ -2,6 +2,7 @@ defmodule JobHuntWeb.JobLive.Interface do
   use JobHuntWeb, :live_view
   use LiveSvelte.Components
   alias JobHunt.Job.Context
+  alias JobHunt.Resume.Context, as: ResumeContext
   require Logger
 
   @impl true
@@ -10,12 +11,14 @@ defmodule JobHuntWeb.JobLive.Interface do
       socket
       |> assign(:page_title, "Job Interface")
       |> assign(:jobs, [])
+      |> assign(:resumes, [])
       |> assign(:selected_job_id, nil)
       |> assign(:selected_job, nil)
       |> assign(:creating_job, false)
 
     if connected?(socket) do
       send(self(), :load_jobs)
+      send(self(), :load_resumes)
     end
 
     {:ok, socket}
@@ -49,7 +52,7 @@ defmodule JobHuntWeb.JobLive.Interface do
         <div class="absolute right-0 top-0 bottom-0" style="width: 75%; min-width: 75%; max-width: 75%;">
           <.safe_svelte
             name="admin/components/JobDetail"
-            props={%{selectedJob: @selected_job, creatingJob: @creating_job}}
+            props={%{selectedJob: @selected_job, creatingJob: @creating_job, resumes: @resumes}}
             socket={@socket}
             class="w-full h-full"
           />
@@ -68,6 +71,14 @@ defmodule JobHuntWeb.JobLive.Interface do
     encoded_jobs = Enum.map(jobs, &encode_job/1)
     # IO.inspect(encoded_jobs, label: "Encoded jobs")
     socket = assign(socket, :jobs, encoded_jobs)
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info(:load_resumes, socket) do
+    resumes = ResumeContext.list_resumes()
+    encoded_resumes = Enum.map(resumes, &encode_resume/1)
+    socket = assign(socket, :resumes, encoded_resumes)
     {:noreply, socket}
   end
 
@@ -226,9 +237,10 @@ defmodule JobHuntWeb.JobLive.Interface do
   end
 
   @impl true
-  def handle_event("generate_cv", %{"jobId" => job_id}, socket) do
+  def handle_event("generate_cv", %{"jobId" => job_id} = params, socket) do
     job = Context.get_job!(job_id)
-    {html_content1, html_content2} = JobHunt.CVGenerator.generate_html()
+    resume_id = Map.get(params, "resumeId")
+    {html_content1, html_content2} = JobHunt.CVGenerator.generate_html(resume_id)
     {cover_letter} = JobHunt.CoverLetterGenerator.generate_html(
       job.description,
       "Not specified",  # We can add a field for addressee later if needed
@@ -266,7 +278,17 @@ defmodule JobHuntWeb.JobLive.Interface do
   end
 
   @impl true
-  def handle_event("generate_pdf", %{
+  def handle_event("generate_pdf", params, socket) do
+    export_format = Map.get(params, "export_format", "pdf") # Default to PDF
+
+    if export_format == "docx" do
+      handle_generate_docx(params, socket)
+    else
+      handle_generate_pdf(params, socket)
+    end
+  end
+
+  defp handle_generate_pdf(%{
     "cv_content1" => content1,
     "cv_content2" => content2,
     "cover_letter_content" => cover_letter,
@@ -383,6 +405,75 @@ defmodule JobHuntWeb.JobLive.Interface do
     end
   end
 
+  defp handle_generate_docx(%{
+    "cv_content1" => content1,
+    "cv_content2" => content2,
+    "cover_letter_content" => cover_letter,
+    "companyName" => company_name
+  } = params, socket) do
+    try do
+      # Create the generated_pdfs/company directory if it doesn't exist
+      safe_company_name = String.replace(company_name, ~r/[^a-zA-Z0-9_-]/, "_")
+      company_dir = Path.join([Application.app_dir(:job_hunt, "priv"), "static", "generated_pdfs", safe_company_name])
+      File.mkdir_p!(company_dir)
+
+      # Generate unique filename with timestamp
+      timestamp = DateTime.utc_now() |> DateTime.to_unix()
+
+      # Generate CV DOCX
+      cv_filename = "CV_#{timestamp}.docx"
+      cv_result = JobHunt.CVGenerator.generate_docx(content1, content2, safe_company_name, cv_filename)
+
+      # Generate Cover Letter DOCX
+      cover_filename = "CoverLetter_#{timestamp}.docx"
+      cover_result = JobHunt.CoverLetterGenerator.generate_docx(cover_letter, safe_company_name, cover_filename)
+
+      # Generate Selection Criteria DOCX if content is provided
+      selection_criteria_result = if Map.has_key?(params, "selection_criteria_content1") and Map.has_key?(params, "selection_criteria_content2") do
+        # For now, we'll skip selection criteria DOCX generation
+        # You can add it later if needed
+        :ok
+      else
+        :ok
+      end
+
+      case {cv_result, cover_result, selection_criteria_result} do
+        {{:ok, _cv_path}, {:ok, _cover_path}, :ok} ->
+          # Extract relative paths
+          cv_relative_path = "/generated_pdfs/#{safe_company_name}/#{cv_filename}"
+          cover_relative_path = "/generated_pdfs/#{safe_company_name}/#{cover_filename}"
+
+          response = %{
+            success: true,
+            cv_path: cv_relative_path,
+            cover_letter_path: cover_relative_path
+          }
+
+          response = if Map.has_key?(params, "selection_criteria_content1") do
+            sc_filename = "SelectionCriteria_#{timestamp}.docx"
+            sc_relative_path = "/generated_pdfs/#{safe_company_name}/#{sc_filename}"
+            Map.put(response, :selection_criteria_path, sc_relative_path)
+          else
+            response
+          end
+
+          {:reply, response, socket}
+
+        {{:error, cv_error}, _, _} ->
+          {:reply, %{success: false, error: "CV DOCX generation failed: #{inspect(cv_error)}"}, socket}
+
+        {_, {:error, cover_error}, _} ->
+          {:reply, %{success: false, error: "Cover Letter DOCX generation failed: #{inspect(cover_error)}"}, socket}
+
+        other ->
+          {:reply, %{success: false, error: "Unexpected DOCX generation result: #{inspect(other)}"}, socket}
+      end
+    rescue
+      error ->
+        {:reply, %{success: false, error: "DOCX generation failed: #{inspect(error)}"}, socket}
+    end
+  end
+
   defp translate_errors(changeset) do
     Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
       Regex.replace(~r"%{(\w+)}", msg, fn _, key ->
@@ -435,4 +526,69 @@ defmodule JobHuntWeb.JobLive.Interface do
   # Helper to determine status for encoding (adjust logic as needed)
   defp job_status(%JobHunt.Job{archived: true}), do: "Archived"
   defp job_status(_), do: "Active" # Default to Active if not archived
+
+  # Encoder function for Resume struct
+  defp encode_resume(nil), do: nil
+  defp encode_resume(%JobHunt.Resume{} = resume) do
+    %{
+      "id" => resume.id,
+      "name" => resume.name,
+      "experience" => Enum.map(resume.experience, &encode_experience/1),
+      "education" => Enum.map(resume.education, &encode_education/1),
+      "projects" => Enum.map(resume.projects, &encode_project/1),
+      "skills" => Enum.map(resume.skills, &encode_skill/1),
+      "created_at" => format_datetime(resume.inserted_at),
+      "updated_at" => format_datetime(resume.updated_at)
+    }
+  end
+
+  defp encode_experience(nil), do: nil
+  defp encode_experience(%JobHunt.Resume.Experience{} = exp) do
+    %{
+      "id" => exp.id,
+      "company" => exp.company,
+      "positions" => exp.positions,
+      "start_date" => exp.start_date,
+      "end_date" => exp.end_date,
+      "highlights" => exp.highlights,
+      "relevant_experience" => exp.relevant_experience,
+      "technologies" => exp.technologies
+    }
+  end
+
+  defp encode_education(nil), do: nil
+  defp encode_education(%JobHunt.Resume.Education{} = edu) do
+    %{
+      "id" => edu.id,
+      "institution" => edu.institution,
+      "courses" => edu.courses,
+      "highlights" => edu.highlights
+    }
+  end
+
+  defp encode_project(nil), do: nil
+  defp encode_project(%JobHunt.Resume.Project{} = proj) do
+    %{
+      "id" => proj.id,
+      "name" => proj.name,
+      "description" => proj.description,
+      "technologies" => proj.technologies,
+      "highlights" => proj.highlights
+    }
+  end
+
+  defp encode_skill(nil), do: nil
+  defp encode_skill(%JobHunt.Resume.Skill{} = skill) do
+    %{
+      "id" => skill.id,
+      "category" => skill.category,
+      "items" => skill.items
+    }
+  end
+
+  defp format_datetime(nil), do: nil
+  defp format_datetime(%NaiveDateTime{} = ndt) do
+    DateTime.from_naive!(ndt, "Etc/UTC") |> DateTime.to_iso8601()
+  end
+  defp format_datetime(%DateTime{} = dt), do: DateTime.to_iso8601(dt)
 end

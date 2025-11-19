@@ -20,6 +20,9 @@ const commonOptions = {
     bundle: true,
     sourcemap: watch ? "inline" : false,
     logLevel: "info",
+    logOverride: {
+        "invalid-source-mappings": "silent" // Suppress source map warnings from third-party libraries
+    },
     tsconfig: "./tsconfig.json",
     target: ["es2020"],
     define: {
@@ -45,8 +48,7 @@ let optsClient = {
             compilerOptions: {
                 dev: !deploy,
                 css: "injected",
-                generate: "client",
-                hydratable: true
+                generate: "client"
             },
             // Use filterWarnings as per esbuild-svelte source code
             filterWarnings: (warning) => {
@@ -78,8 +80,7 @@ let optsServer = {
             compilerOptions: {
                 dev: !deploy,
                 css: "injected",
-                generate: "server",
-                hydratable: true
+                generate: "server"
             },
             // Use filterWarnings as per esbuild-svelte source code
             filterWarnings: (warning) => {

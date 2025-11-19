@@ -10,7 +10,7 @@ defmodule JobHunt.CVGenerator do
 
   EEx.function_from_file(:def, :render_left_column, left_column_template_path, [:assigns])
 
-  def generate_html() do
+  def generate_html(resume_id \\ nil) do
     css_styles_path = Path.join(:code.priv_dir(:job_hunt), "static/cv_styles.html")
     css_styles = File.read!(css_styles_path)
 
@@ -24,8 +24,12 @@ defmodule JobHunt.CVGenerator do
     image_data = File.read!(image_path) |> Base.encode64()
     profile_image = "<img src=\"data:image/jpeg;base64,#{image_data}\" class=\"profile-image\">"
 
-    # Get the most recent resume from the database
-    resume = Context.get_most_recent_resume()
+    # Get the resume from the database - use specified resume_id or most recent
+    resume = if resume_id do
+      Context.get_resume!(resume_id)
+    else
+      Context.get_most_recent_resume()
+    end
 
     if is_nil(resume) do
       raise "No resume found in the database"
@@ -204,6 +208,93 @@ defmodule JobHunt.CVGenerator do
     rescue
       e -> {:error, Exception.message(e)}
     end
+  end
+
+  def generate_docx(html_content1, html_content2, company_name, filename \\ nil) do
+    try do
+      # Generate the directory structure
+      base_pdf_dir = "priv/static/generated_pdfs"
+      output_dir = Path.join(base_pdf_dir, company_name)
+      File.mkdir_p!(output_dir)
+
+      # Define the output path - use provided filename or default
+      final_output_path = if filename do
+        Path.join(output_dir, filename)
+      else
+        Path.join(output_dir, "Harley Gray CV.docx")
+      end
+
+      # Combine both HTML pages into a single document
+      combined_html = """
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          @page {
+            size: A4;
+            margin: 0;
+          }
+          body {
+            margin: 0;
+            padding: 0;
+          }
+          .page-break {
+            page-break-after: always;
+          }
+        </style>
+      </head>
+      <body>
+        #{extract_body_content(html_content1)}
+        <div class="page-break"></div>
+        #{extract_body_content(html_content2)}
+      </body>
+      </html>
+      """
+
+      # Write HTML to temporary file
+      temp_html_path = Path.join(System.tmp_dir(), "cv_#{:rand.uniform(1000000)}.html")
+      File.write!(temp_html_path, combined_html)
+
+      # Use Pandoc to convert HTML to DOCX
+      # Check if pandoc is available
+      case System.cmd("which", ["pandoc"]) do
+        {_, 0} ->
+          # Pandoc is available, use it
+          # Use --standalone to include CSS and proper document structure
+          case System.cmd("pandoc", [
+                 temp_html_path,
+                 "-o", final_output_path,
+                 "--standalone",
+                 "--from=html",
+                 "--to=docx"
+               ]) do
+            {_, 0} ->
+              File.rm(temp_html_path)
+              IO.puts("Final DOCX generated: #{final_output_path}")
+              {:ok, final_output_path}
+
+            {error_output, exit_code} ->
+              File.rm(temp_html_path)
+              {:error, "Pandoc conversion failed (exit code #{exit_code}): #{error_output}"}
+          end
+
+        _ ->
+          # Pandoc not found
+          File.rm(temp_html_path)
+          {:error, "Pandoc is not installed. Please install Pandoc to generate DOCX files. Install from: https://pandoc.org/installing.html"}
+      end
+    rescue
+      e -> {:error, Exception.message(e)}
+    end
+  end
+
+  # Helper function to extract body content from HTML
+  defp extract_body_content(html_content) do
+    # Remove the outer html/head tags and extract just the body content
+    html_content
+    |> String.replace(~r/^.*?<body[^>]*>/s, "")
+    |> String.replace(~r/<\/body>.*?$/s, "")
   end
 
   defp generate_html_content(

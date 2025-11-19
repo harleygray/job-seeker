@@ -3,7 +3,7 @@
     import { Button } from "$lib/components/ui/button";
     import { onMount, tick } from "svelte";
 
-    const { editMode, selectedJob, live } = $props<{
+    const { editMode, selectedJob, live, resumes = [] } = $props<{
         editMode: boolean;
         selectedJob: {
             id: number;
@@ -26,6 +26,10 @@
             include_selection_criteria: boolean;
         } | null;
         live: any;
+        resumes?: Array<{
+            id: number | string;
+            name: string;
+        }>;
     }>();
 
     let cv_html_content1 = $state<string | null>(null);
@@ -41,6 +45,7 @@
     let loading = $state(false);
     let error = $state<string | null>(null);
     let isEditing = $state(false);
+    let selectedResumeId = $state<number | string | "">("");
 
     let cv1Div = $state<HTMLDivElement | null>(null);
     let cv2Div = $state<HTMLDivElement | null>(null);
@@ -68,12 +73,19 @@
             error = null;
             console.log('Starting preview generation...');
 
+            const payload: any = {
+                jobId: selectedJob.id,
+            };
+
+            // Include resume_id if a resume is selected and there are multiple resumes
+            if (resumes.length > 1 && selectedResumeId && selectedResumeId !== "") {
+                payload.resumeId = selectedResumeId;
+            }
+
             const reply = await new Promise<CVReply>((resolve) => {
                 live.pushEvent(
                     "generate_cv",
-                    {
-                        jobId: selectedJob.id,
-                    },
+                    payload,
                     resolve,
                 );
             });
@@ -117,6 +129,7 @@
                     cover_letter_html_content,
                 jobId: selectedJob.id,
                 companyName: selectedJob.employer,
+                export_format: "pdf", // Default to PDF format
             };
 
             // Add selection criteria content if available
@@ -311,16 +324,27 @@
     }
 </style>
 
-<div class="space-y-4 w-full flex flex-col" style="width: 100%; min-width: 100%; max-width: 100%;" bind:this={containerDiv}>
+    <div class="space-y-4 w-full flex flex-col" style="width: 100%; min-width: 100%; max-width: 100%;" bind:this={containerDiv}>
     
     <div class="flex justify-between items-center">
         <h3 class="text-lg font-medium">Document Preview</h3>
-        <div class="space-x-2">
+        <div class="flex items-center space-x-2">
             {#if !cv_html_content1 && !cv_html_content2 && !cover_letter_html_content}
+                {#if resumes.length > 1}
+                    <select
+                        bind:value={selectedResumeId}
+                        class="px-3 py-2 text-sm border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                        <option value="">Select a resume...</option>
+                        {#each resumes as resume}
+                            <option value={resume.id}>{resume.name}</option>
+                        {/each}
+                    </select>
+                {/if}
                 <Button
                     variant="action_primary"
                     onclick={generatePreview}
-                    disabled={loading}
+                    disabled={loading || (resumes.length > 1 && (!selectedResumeId || selectedResumeId === ""))}
                 >
                     {loading ? "Generating..." : "Generate Preview"}
                 </Button>
